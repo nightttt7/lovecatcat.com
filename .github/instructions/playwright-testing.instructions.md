@@ -1,0 +1,77 @@
+---
+applyTo: '**'
+---
+
+## Playwright Testing Guidelines
+
+### Usage
+- Use this for browser-level validation, regression checks, interaction exploration, and Playwright test generation against the local site.
+- Prioritize real user flows such as home-page pagination, author filtering, post details, language switching, login/signup, and comment submission.
+
+### Global Playwright Rules
+- On this machine, prefer the user-level global Playwright installation. Do not assume the current repository needs a local Playwright dependency.
+- Only check for globally available `playwright` when browser automation is actually needed.
+- If a temporary Node script uses `require('playwright')`, first confirm that the current shell can resolve global Node modules, for example through a valid `NODE_PATH` setup.
+- When using the CLI directly, prefer `playwright ...` instead of reinstalling Playwright with `npm install playwright`.
+
+### Runtime Rules
+- Start the local service first with `npm run dev`.
+- The default local test URL is `http://localhost:3000/`.
+- For Cloudflare Remote Preview validation, start `npm run wrangler:dev:remote` first.
+- The default Remote Preview URL is `http://127.0.0.1:8787/`. It connects to the preview environment and can also serve as the Playwright test entry point.
+- Browser-level validation must include real clicks, typing, form submission, and navigation rather than only checking static HTML.
+
+### Recommended Flow
+1. Open the home page first and confirm that the top navigation, post list, and pagination links render correctly.
+2. Cover at least three core flows and record the key locators, expected results, and actual results.
+3. For authenticated testing, prefer reusing the test accounts listed below instead of registering unrelated temporary accounts that pollute the data set.
+4. When validating Chinese/English switching, test both `/api/lang?to=en` and `/api/lang?to=zh`, and confirm the page returns to the source page.
+5. After tests that involve login state, visit `/logout` first to clean up the session before the next scenario.
+
+### MCP Browser Testing Requirements
+- Prefer the browser MCP / Playwright tools for real interaction.
+- Confirm the resulting page title, text, URL, or error message.
+- If browser tools are unavailable, fall back to the global Playwright CLI or a temporary Node script and state the limitation clearly.
+
+### Mobile Testing Requirements
+- Default to `Pixel 7` device emulation for mobile testing rather than a manually narrowed desktop browser.
+- Validate home-page pagination so that when the total page count is greater than two, the first-page minimal pagination displays `1 2 ...`.
+- Validate that when the minimal pagination does not show page 1, it includes a leading `...`, for example `... 5 6 7 ...`.
+- After tapping mobile pagination, both the URL and the post list content must change.
+- Validate that language switching keeps the current page while changing navigation, headings, and pagination labels.
+- Validate that author filtering shows only posts for the selected author and preserves the `authorId` pagination parameter.
+
+### Recommended Core Flows
+- Home-page pagination: clicking a pagination link should change both the URL and the post list content.
+- Author filtering: clicking an author name should show only that author's posts, and pagination should preserve `authorId`.
+- Post detail: when an unauthenticated user opens a post page, they should see the comment list and login/signup links rather than a comment form.
+- Language switching: clicking the language switcher should keep the current page while changing navigation and page text.
+- Failed login: submitting an incorrect account or password should show a clear error message.
+- Comment after login: after a regular user signs in, they should see a comment input on the post detail page and be able to submit a comment.
+- Admin capabilities: after an admin signs in, they should see admin entry points and post/comment management controls.
+
+### Test Accounts
+- Local `dev.db` accounts:
+  - Admin: `admin_1@example.com` / `admin123456`
+  - Admin: `admin_2@example.com` / `admin123456`
+  - Regular user: `test_user_1@example.com` / `test123456`
+  - Regular user: `test_user_2@example.com` / `test123456`
+  - Regular user: `test_user_3@example.com` / `test123456`
+  - Regular user: `test_user_4@example.com` / `test123456`
+- Remote Preview accounts:
+  - Regular user: `test_user_1@example.com` / `test123456`
+
+### Remote Preview Notes
+- Remote Preview uses independent preview D1 data and is appropriate for browser-level testing and integration checks.
+- For already deployed preview testing, you can also use the stable preview `workers.dev` URL directly.
+- Do not assume local `dev.db` seed data exists in Remote Preview.
+- If an admin-only feature needs to be tested in Remote Preview or deployed preview, ask the user to log in with an admin account in the shared browser session before continuing.
+
+### Account Usage Rules
+- Use admin accounts to validate admin entry points, post management, comment deletion, user management, and other admin-only capabilities.
+- Use regular accounts to validate commenting after login, personal pages, and regular-user permission boundaries.
+- If login fails, check that local test data has been initialized correctly before changing business logic.
+
+### Test Output Requirements
+- When reporting results, include the actual test steps, key locators used, expected results, and actual results.
+- When generating automation, split tests by user flow and use clear names rather than packing too many large flows into one test.

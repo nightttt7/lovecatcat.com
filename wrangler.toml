@@ -1,0 +1,25 @@
+name = "lovecatcat"
+main = "src/worker.ts"
+compatibility_date = "2026-02-01"
+routes = [
+	{ pattern = "lovecatcat.com", custom_domain = true }
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lovecatcat-prod"
+database_id = "aebaaa10-b2e7-4f1f-9dc1-70edbea8c523"
+
+[env.preview]
+workers_dev = true
+preview_urls = false
+routes = []
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "lovecatcat-preview"
+database_id = "ac29b946-6fb8-406f-af7b-b07b82d05ca6"
+
+# [[r2_buckets]]
+# binding = "R2"
+# bucket_name = "lovecatcat-assets"

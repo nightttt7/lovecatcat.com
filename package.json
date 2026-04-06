@@ -1,0 +1,36 @@
+{
+  "name": "lovecatcat-blog",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "wrangler:dev:remote": "wrangler dev --remote --env preview",
+    "deploy:preview": "wrangler deploy --env preview",
+    "deploy:preview:inactive": "wrangler deploy --env preview --config wrangler.preview-inactive.toml",
+    "deploy:production": "wrangler deploy --env=\"\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.11.1",
+    "@noble/hashes": "^2.0.1",
+    "better-sqlite3": "^12.8.0",
+    "hono": "^4.4.8",
+    "marked": "^12.0.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240208.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^2.1.9",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9",
+    "wrangler": "^4.78.0"
+  }
+}
