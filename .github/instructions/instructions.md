@@ -30,11 +30,13 @@ If image upload, R2, or preview are implemented later, they should be added incr
 4. Implement in phases: complete the data layer and authentication first, then the home page / post details / comments, then admin management. Treat image upload and R2 as later phases, and validate output against the real structure using `dev.db`.
 
 ### Environment and Deployment Rules
+- This is a solo-development repository. Use `dev` as the only long-lived development branch unless the user explicitly asks for another branch.
+- Do not ask for or create extra feature branches by default. `master` is the release branch, not the working branch.
 - Local `npm run dev` depends only on Node.js and the project-root `dev.db` by default and does not need to connect to Cloudflare.
 - `npm run wrangler:dev:remote` can be used as the Playwright browser-test entry point and connects to the preview environment with its own preview D1.
 - `npm run wrangler:dev:remote`, `npm run deploy:preview`, `npm run deploy:preview:inactive`, and `npm run deploy:production` connect to Cloudflare, so Wrangler must already have working Cloudflare access before they are run.
 - `npm run wrangler:dev:remote` always targets the preview environment, using Worker `lovecatcat-preview` and D1 `lovecatcat-preview`. Do not treat it as a production remote-debug entry point.
-- The default release order is `npm run deploy:preview`, then pause for human preview UAT and `npm run deploy:preview:inactive`, and only after confirmation proceed to `npm run deploy:production`. Do not skip preview and deploy straight to production.
+- The default release order is: develop on `dev` -> `npm run deploy:preview` from `dev` -> pause for human preview UAT -> `npm run deploy:preview:inactive` -> merge `dev` into `master` -> `npm run deploy:production` from `master`. Do not skip preview, do not deploy production directly from `dev`, and do not deploy straight to production.
 - For local machines or CI accessing Cloudflare, the current convention is to use `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for authentication and account selection.
 - On local Windows development machines, prefer system environment variables for Cloudflare credentials rather than storing secrets in repository `.env` files.
 - Cloudflare Worker runtime variables are separate from local `.env` files. Secrets such as `ADMIN_EMAILS` do not inherit between preview and production and must be configured separately.
@@ -69,4 +71,5 @@ If image upload, R2, or preview are implemented later, they should be added incr
 8. Deployed the Worker to Cloudflare under the name `lovecatcat`. The production primary domain has been switched to `https://lovecatcat.com`, and production `workers.dev` has been disabled.
 9. Verified through Playwright MCP that the stable preview URL can load the app directly. The current deployment and remote-debug flow treats the independent preview environment as the only test entry point.
 10. Confirmed that production D1 currently holds independent site data and is not equivalent to local `dev.db`. Future production validation must not assume local admin test accounts already exist.
-11. Established an independent `preview` Worker environment and `lovecatcat-preview` D1. Future Cloudflare releases should follow the default flow: preview -> human UAT -> `npm run deploy:preview:inactive` -> production.
+11. Established an independent `preview` Worker environment and `lovecatcat-preview` D1. Future Cloudflare releases should follow the default flow: develop on `dev` -> preview -> human UAT -> `npm run deploy:preview:inactive` -> merge `dev` into `master` -> production.
+12. Defined the solo-development branch workflow: develop on `dev`, use preview deploy for UAT, then merge approved changes into `master` before production deployment.

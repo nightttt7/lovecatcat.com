@@ -25,6 +25,43 @@ npm run test:watch
 npm run test:coverage
 ```
 
+## Git Workflow
+
+This repository uses a simple solo-development branch model:
+
+- `dev` is the only long-lived development branch.
+- `master` is reserved for UAT-approved production releases.
+- Day-to-day coding, local verification, and preview deployment all happen from `dev`.
+- Production deployment happens only after the approved `dev` state has been merged into `master`.
+
+Each development cycle should follow this order:
+
+```bash
+# Stay on the solo development branch
+git switch dev
+
+# Develop and verify locally
+npm run dev
+npm run test
+
+# Deploy the current dev state to preview for UAT
+npm run deploy:preview
+
+# Run preview smoke tests / UAT at https://lovecatcat-preview.nightttt7.workers.dev
+
+# After UAT passes, close the public preview URL
+npm run deploy:preview:inactive
+
+# Merge the approved dev state into master
+git switch master
+git merge dev
+
+# Deploy production from master
+npm run deploy:production
+```
+
+If no special release branch is needed, keep working on `dev` for the next cycle and treat `master` only as the production-ready branch.
+
 ## Technology Stack
 
 - TypeScript 5.6
@@ -108,6 +145,9 @@ Cloudflare authentication must already be set up, and the preview-specific `ADMI
 ### Deploy
 
 ```bash
+# Start from the solo development branch
+git switch dev
+
 # Confirm the Cloudflare account and token are pointing to the correct account first
 npx wrangler whoami
 
@@ -123,7 +163,11 @@ npm run deploy:preview
 # After UAT, deactivate the preview URL while keeping the preview Worker and preview D1
 npm run deploy:preview:inactive
 
-# Deploy to production; the script explicitly targets the top-level production environment
+# Merge the approved dev state into master
+git switch master
+git merge dev
+
+# Deploy to production from master; the script explicitly targets the top-level production environment
 # Equivalent to: wrangler deploy --env=""
 npm run deploy:production
 ```
@@ -132,7 +176,7 @@ The current production Worker is `lovecatcat`, backed by database `lovecatcat-pr
 
 The preview Worker is `lovecatcat-preview`, backed by database `lovecatcat-preview`, with the stable preview URL `https://lovecatcat-preview.nightttt7.workers.dev`.
 
-Preview is intended only for short-lived UAT. After validation, run `npm run deploy:preview:inactive` to disable the `workers.dev` entry so it does not remain publicly accessible. Re-run `npm run deploy:preview` when the next UAT cycle starts.
+Preview is intended only for short-lived UAT from `dev`. After validation, run `npm run deploy:preview:inactive` to disable the `workers.dev` entry so it does not remain publicly accessible, then merge the approved `dev` state into `master` before running production deployment. Re-run `npm run deploy:preview` when the next UAT cycle starts.
 
 Before any deploy, confirm that `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `npx wrangler whoami` are all correct, and that `ADMIN_EMAILS` has been configured separately for preview and production.
 
