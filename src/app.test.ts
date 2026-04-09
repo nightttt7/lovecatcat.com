@@ -56,6 +56,24 @@ describe("createApp", () => {
     });
   });
 
+  describe("GET /static/post-editor-preview.js", () => {
+    it("returns the client-side markdown preview script", async () => {
+      const app = createApp(mockOptions);
+      const res = await app.request("/static/post-editor-preview.js");
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+
+      const text = await res.text();
+      expect(text).toContain("matchMedia(\"(min-width: 1012px)\")");
+      expect(text).toContain("data-post-editor-root");
+      expect(text).toContain("requestAnimationFrame");
+      expect(text).toContain("scrollHeight");
+      expect(text).toContain("scrollTop");
+      expect(text).not.toContain("__name(");
+    });
+  });
+
   describe("GET /favicon.ico", () => {
     it("returns the site favicon with cache headers", async () => {
       const app = createApp(mockOptions);

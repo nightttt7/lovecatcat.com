@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { html, raw } from "hono/html";
 import { faviconIco } from "./assets/favicon";
+import { postEditorPreviewScript } from "./assets/post-editor-preview";
 import { primerCss } from "./assets/primer";
 import type { SiteConfig } from "./config";
 import type { BlogDb, CommentRow, PostDetailRow, PostListRow, UserRow } from "./db/types";
@@ -874,14 +875,46 @@ const renderPostEditorBody = ({
               <span class="ml-2">${t("postDraftLabel", lang)}</span>
             </label>
           </div>
-          <div class="mb-3">
-            <label class="d-block text-bold mb-2" for="body">${t("postBodyLabel", lang)}</label>
-            <textarea id="body" name="body" class="form-control width-full" rows="18" required>${bodyValue || ""}</textarea>
+          <div class="mb-3" data-post-editor-root>
+            <div class="d-flex flex-justify-between flex-items-center mb-2 flex-wrap">
+              <p class="f6 text-gray mb-0">${t("postEditorLiveHint", lang)}</p>
+            </div>
+            <div class="BtnGroup post-editor-mobile-toggle" aria-label="${t("postBodyLabel", lang)}">
+              <button type="button" class="btn BtnGroup-item btn-primary" data-post-editor-switch="input" aria-pressed="true">
+                ${t("postEditorMarkdownTab", lang)}
+              </button>
+              <button type="button" class="btn BtnGroup-item" data-post-editor-switch="preview" aria-pressed="false">
+                ${t("postEditorPreviewTab", lang)}
+              </button>
+            </div>
+            <div class="post-editor-grid">
+              <section class="post-editor-pane" data-post-editor-pane="input">
+                <div class="Box color-bg-default post-editor-panel">
+                  <div class="Box-header d-flex flex-items-center">
+                    <label class="text-bold mb-0" for="body">${t("postEditorMarkdownTab", lang)}</label>
+                  </div>
+                  <div class="Box-body post-editor-pane-body">
+                    <textarea id="body" name="body" class="form-control width-full post-editor-input" rows="18" required data-post-editor-input>${bodyValue || ""}</textarea>
+                  </div>
+                </div>
+              </section>
+              <section class="post-editor-pane" data-post-editor-pane="preview">
+                <div class="Box color-bg-default post-editor-panel">
+                  <div class="Box-header d-flex flex-items-center">
+                    <h2 class="h4 mb-0">${t("postEditorPreviewTab", lang)}</h2>
+                  </div>
+                  <div class="Box-body post-editor-pane-body">
+                    <div class="markdown-body post-editor-preview-frame" data-post-editor-preview data-post-editor-empty-state="${t("postEditorPreviewEmpty", lang)}"></div>
+                  </div>
+                </div>
+              </section>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary">${t("savePost", lang)}</button>
         </form>
       </div>
     </div>
+    <script src="/static/post-editor-preview.js" defer></script>
   `;
 };
 
@@ -951,6 +984,12 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
   app.get("/static/primer.css", (c) => {
     return c.text(primerCss, 200, {
       "content-type": "text/css; charset=utf-8"
+    });
+  });
+
+  app.get("/static/post-editor-preview.js", (c) => {
+    return c.text(postEditorPreviewScript, 200, {
+      "content-type": "text/javascript; charset=utf-8"
     });
   });
 

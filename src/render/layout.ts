@@ -332,6 +332,111 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
           .delete-confirm-submit {
             border: var(--borderWidth-thin) solid var(--button-danger-borderColor-rest, var(--color-btn-danger-hover-border));
           }
+
+          .post-editor-mobile-toggle {
+            display: none;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+          }
+
+          .post-editor-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            align-items: stretch;
+          }
+
+          .post-editor-pane {
+            min-width: 0;
+            display: flex;
+          }
+
+          .post-editor-pane[hidden] {
+            display: none !important;
+          }
+
+          .post-editor-panel {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            width: 100%;
+            min-width: 0;
+          }
+
+          .post-editor-panel .Box-header {
+            gap: 0.75rem;
+            min-height: 3rem;
+          }
+
+          .post-editor-pane-body {
+            display: flex;
+            flex: 1 1 auto;
+            min-height: clamp(30rem, 68vh, 52rem);
+            max-height: clamp(30rem, 68vh, 52rem);
+            min-width: 0;
+            width: 100%;
+          }
+
+          .post-editor-input {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+            resize: none;
+            overflow: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+            font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+          }
+
+          .post-editor-preview-frame {
+            flex: 1 1 auto;
+            min-height: 0;
+            max-height: none;
+            width: 100%;
+            overflow: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+          }
+
+          .post-editor-preview-frame[data-post-editor-empty="true"] {
+            color: var(--fgColor-muted);
+          }
+
+          .post-editor-preview-frame > :first-child {
+            margin-top: 0 !important;
+          }
+
+          .post-editor-preview-frame > :last-child {
+            margin-bottom: 0 !important;
+          }
+
+          @media (max-width: 1011px) {
+            [data-post-editor-root] .post-editor-grid {
+              display: block;
+            }
+
+            [data-post-editor-root] [data-post-editor-pane="preview"] {
+              display: none;
+            }
+
+            [data-post-editor-root][data-post-editor-enhanced="true"] .post-editor-mobile-toggle {
+              display: flex;
+            }
+
+            [data-post-editor-root][data-post-editor-enhanced="true"] [data-post-editor-pane="preview"] {
+              display: block;
+            }
+
+            .post-editor-pane-body {
+              min-height: 24rem;
+              max-height: 24rem;
+            }
+
+            .post-editor-preview-frame {
+              max-height: none;
+            }
+          }
         </style>
       </head>
       <body class="bg-gray-light">
