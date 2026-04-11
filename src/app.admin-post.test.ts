@@ -48,6 +48,8 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain('id="visibility" name="visibility" class="form-select width-full"');
     expect(html).toContain('option value="public" selected');
     expect(html).toContain('id="body" name="body" class="form-control width-full post-editor-input" rows="18" required data-post-editor-input');
+    expect(html).toContain('class="mb-3 post-editor-breakout-shell"');
+    expect(html).toContain('class="post-editor-breakout" data-post-editor-root');
     expect(html).toContain('data-post-editor-root');
     expect(html).toContain('data-post-editor-pane="input"');
     expect(html).toContain('data-post-editor-pane="preview"');

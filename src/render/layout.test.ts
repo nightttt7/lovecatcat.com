@@ -279,6 +279,23 @@ describe("renderLayout", () => {
     expect(html).toContain('overflow: hidden');
   });
 
+  it("includes scoped ultra-wide post editor breakout styles", () => {
+    const result = renderLayout({
+      title: "Test",
+      description: "Test",
+      site: mockSiteConfig,
+      isAdmin: true,
+      body: '<div class="post-editor-breakout-shell"><div class="post-editor-breakout" data-post-editor-root><div class="post-editor-grid"></div></div></div>'
+    });
+
+    const html = result.toString();
+    expect(html).toContain('.post-editor-breakout-shell');
+    expect(html).toContain('.post-editor-breakout');
+    expect(html).toContain('@media (min-width: 1440px)');
+    expect(html).toContain('width: min(calc(100vw - 2rem), 126rem);');
+    expect(html).toContain('transform: translateX(-50%);');
+  });
+
   it("keeps full pagination when the container can fit every link", () => {
     expect(
       resolveResponsivePaginationMode({

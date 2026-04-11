@@ -333,6 +333,15 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
             border: var(--borderWidth-thin) solid var(--button-danger-borderColor-rest, var(--color-btn-danger-hover-border));
           }
 
+          .post-editor-breakout-shell {
+            width: 100%;
+          }
+
+          .post-editor-breakout {
+            width: 100%;
+            max-width: 100%;
+          }
+
           .post-editor-mobile-toggle {
             display: none;
             gap: 0.5rem;
@@ -409,6 +418,16 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
 
           .post-editor-preview-frame > :last-child {
             margin-bottom: 0 !important;
+          }
+
+          @media (min-width: 1440px) {
+            .post-editor-breakout {
+              position: relative;
+              left: 50%;
+              width: min(calc(100vw - 2rem), 126rem);
+              max-width: none;
+              transform: translateX(-50%);
+            }
           }
 
           @media (max-width: 1011px) {
