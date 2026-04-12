@@ -338,6 +338,7 @@ const renderPrivateBadge = (isPrivate: number | null | undefined, lang: Lang) =>
 
 const renderLabelDirectory = (labels: Array<{ tag: string; postCount: number }>, lang: Lang) => {
   return html`
+    ${renderHomeSectionNav("labels", lang)}
     <div class="d-flex flex-justify-between flex-items-center mb-4 flex-wrap">
       <h1 class="h2 mb-2">${t("labelsTitle", lang)}</h1>
     </div>
@@ -356,8 +357,64 @@ const renderLabelDirectory = (labels: Array<{ tag: string; postCount: number }>,
   `;
 };
 
+type HomeSectionNavKey = "posts" | "labels" | "authors";
+
+const renderHomeSectionNavLink = (href: string, label: string, isCurrent: boolean) => {
+  return html`<a href="${href}"${raw(isCurrent ? ' aria-current="page"' : "")} class="home-section-link h2 mb-2 mb-sm-0 text-bold color-fg-default">${label}</a>`;
+};
+
+const renderHomeSectionNav = (currentSection: HomeSectionNavKey, lang: Lang) => {
+  return html`
+    <style>
+      .home-section-link {
+        display: inline-block;
+        text-decoration: none;
+      }
+      .home-section-link:hover {
+        color: var(--fgColor-default);
+        text-decoration: underline dashed !important;
+      }
+      .home-section-separator {
+        color: var(--fgColor-muted);
+        font-weight: 400;
+      }
+    </style>
+    <nav class="d-flex flex-wrap flex-items-center mb-4" aria-label="${t("latestPosts", lang)}">
+      ${renderHomeSectionNavLink("/", t("latestPosts", lang), currentSection === "posts")}
+      <span class="home-section-separator h2 mb-2 mb-sm-0 mx-2" aria-hidden="true">|</span>
+      ${renderHomeSectionNavLink("/labels", t("labels", lang), currentSection === "labels")}
+      <span class="home-section-separator h2 mb-2 mb-sm-0 mx-2" aria-hidden="true">|</span>
+      ${renderHomeSectionNavLink("/authors", t("authors", lang), currentSection === "authors")}
+    </nav>
+  `;
+};
+
+const renderHomeSelectedFilters = ({
+  selectedTag,
+  selectedAuthorName,
+  lang
+}: {
+  selectedTag: string | null;
+  selectedAuthorName: string | null;
+  lang: Lang;
+}) => {
+  if (!selectedTag && !selectedAuthorName) {
+    return html``;
+  }
+
+  return html`
+    ${selectedTag
+      ? html`<div class="mb-4"><h1 class="h2 mb-2">#${selectedTag}</h1></div>`
+      : html``}
+    ${selectedAuthorName
+      ? html`<div class="mb-4"><h1 class="h2 mb-2">${t("author", lang)}: ${selectedAuthorName}</h1></div>`
+      : html``}
+  `;
+};
+
 const renderAuthorDirectory = (authors: Array<{ id: number; username: string | null; post_count: number }>, lang: Lang) => {
   return html`
+    ${renderHomeSectionNav("authors", lang)}
     <div class="d-flex flex-justify-between flex-items-center mb-4 flex-wrap">
       <h1 class="h2 mb-2">${t("authorsTitle", lang)}</h1>
     </div>
@@ -1278,12 +1335,16 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
     const paginationBasePath = paginationParams.size > 0 ? `/?${paginationParams.toString()}` : "/";
 
-    const [posts, total] = await Promise.all([
+    const [posts, total, selectedAuthor] = await Promise.all([
       db.listPosts({ includeDrafts: isAdmin, limit: PAGE_SIZE, offset, authorId, tag, viewerId }),
-      db.countPosts({ includeDrafts: isAdmin, authorId, tag, viewerId })
+      db.countPosts({ includeDrafts: isAdmin, authorId, tag, viewerId }),
+      authorId !== null ? db.getUserById(authorId) : Promise.resolve(null)
     ]);
 
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const selectedAuthorName = authorId !== null
+      ? selectedAuthor?.username ?? posts.find((post) => post.author_id === authorId)?.author_name ?? getUnknownAuthorLabel(lang)
+      : null;
 
     const body = html`
       <style>
@@ -1298,13 +1359,12 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           text-decoration: underline dashed !important;
         }
       </style>
-      <div class="d-flex flex-column flex-sm-row flex-sm-justify-between flex-sm-items-center mb-4">
-        <h1 class="h2 mb-2 mb-sm-0">${t("latestPosts", lang)}</h1>
-        <div class="d-flex flex-wrap flex-items-center gap-2">
-          <a href="/labels" class="Link--primary">${t("labels", lang)}</a>
-          <a href="/authors" class="Link--primary">${t("authors", lang)}</a>
-        </div>
-      </div>
+      ${renderHomeSectionNav("posts", lang)}
+      ${renderHomeSelectedFilters({
+        selectedTag: tag,
+        selectedAuthorName,
+        lang
+      })}
       ${posts.length === 0
         ? renderNotice(t("noPosts", lang))
         : html`

@@ -102,7 +102,7 @@ describe("createApp", () => {
       
       const html = await res.text();
       expect(html).toContain("所有博文");
-      expectHtmlFragmentsInOrder(html, [">所有博文<", 'href="/labels"', 'href="/authors"']);
+      expectHtmlFragmentsInOrder(html, ['href="/"', '>所有博文<', 'href="/labels"', '>标签<', 'href="/authors"', '>作者<']);
       expect(html).toContain("暂无博文内容");
     });
 
@@ -327,6 +327,9 @@ describe("createApp", () => {
         countOptions = options;
         return 25;
       };
+      mockDb.getUserById = async (id) => (id === 7
+        ? { id: 7, username: "Author", email: "author@example.com", is_blocked: 0 }
+        : null);
 
       const app = createApp(mockOptions);
       const res = await app.request("/?authorId=7");
@@ -336,6 +339,7 @@ describe("createApp", () => {
       expect(countOptions).toMatchObject({ authorId: 7, includeDrafts: false });
 
       const html = await res.text();
+      expect(html).toContain(">作者: Author<");
       expect(html).toContain("/?authorId=7&amp;page=2");
     });
 
@@ -369,6 +373,7 @@ describe("createApp", () => {
       expect(countOptions).toMatchObject({ tag: "markdown test", includeDrafts: false });
 
       const html = await res.text();
+      expect(html).toContain(">#markdown test<");
       expect(html).toContain("/?tag=markdown+test&amp;page=2");
     });
 
@@ -615,6 +620,7 @@ describe("createApp", () => {
       expect(res.status).toBe(200);
 
       const html = await res.text();
+      expectHtmlFragmentsInOrder(html, ['href="/"', '>所有博文<', 'href="/labels"', '>标签<', 'href="/authors"', '>作者<']);
       expect(html).toContain("全部标签");
       expect(html).toContain('href="/?tag=news"');
       expect(html).toContain('href="/?tag=updates"');
@@ -637,6 +643,7 @@ describe("createApp", () => {
       expect(res.status).toBe(200);
 
       const html = await res.text();
+      expectHtmlFragmentsInOrder(html, ['href="/"', '>所有博文<', 'href="/labels"', '>标签<', 'href="/authors"', '>作者<']);
       expect(html).toContain("全部作者");
       expect(html).toContain('href="/?authorId=7"');
       expect(html).toContain('href="/?authorId=8"');
