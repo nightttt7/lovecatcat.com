@@ -33,6 +33,7 @@ export type AppEnv<TBindings extends Record<string, unknown> = Record<string, un
     isAdmin: boolean;
     lang: Lang;
     aboutPostId?: number;
+    toolsPostId?: number;
   };
 };
 
@@ -967,9 +968,15 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     c.set("currentUser", currentUser);
     c.set("isAdmin", isAdmin);
 
-    const aboutPost = await db.getPostByTitle("About", { includeDrafts: isAdmin, viewerId: currentUser?.id ?? null });
+    const [aboutPost, toolsPost] = await Promise.all([
+      db.getPostByTitle("About", { includeDrafts: isAdmin, viewerId: currentUser?.id ?? null }),
+      db.getPostByTitle("Tools", { includeDrafts: isAdmin, viewerId: currentUser?.id ?? null })
+    ]);
     if (aboutPost) {
       c.set("aboutPostId", aboutPost.id);
+    }
+    if (toolsPost) {
+      c.set("toolsPostId", toolsPost.id);
     }
 
     await next();
@@ -1023,6 +1030,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderAuthPageBody({ mode: "login", lang, nextPath }),
         activePath: "/login"
       })
@@ -1053,6 +1061,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderAuthPageBody({
             mode: "login",
             lang,
@@ -1080,6 +1089,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderAuthPageBody({
             mode: "login",
             lang,
@@ -1127,6 +1137,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderAuthPageBody({ mode: "signup", lang, nextPath }),
         activePath: "/signup"
       })
@@ -1169,6 +1180,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderAuthPageBody({
             mode: "signup",
             lang,
@@ -1219,6 +1231,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderAuthPageBody({
             mode: "signup",
             lang,
@@ -1285,8 +1298,12 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           text-decoration: underline dashed !important;
         }
       </style>
-      <div class="d-flex flex-justify-between flex-items-center mb-4">
-        <h1 class="h2 mb-0">${t("latestPosts", lang)}</h1>
+      <div class="d-flex flex-column flex-sm-row flex-sm-justify-between flex-sm-items-center mb-4">
+        <h1 class="h2 mb-2 mb-sm-0">${t("latestPosts", lang)}</h1>
+        <div class="d-flex flex-wrap flex-items-center gap-2">
+          <a href="/labels" class="Link--primary">${t("labels", lang)}</a>
+          <a href="/authors" class="Link--primary">${t("authors", lang)}</a>
+        </div>
       </div>
       ${posts.length === 0
         ? renderNotice(t("noPosts", lang))
@@ -1320,6 +1337,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body,
         activePath: "/"
       })
@@ -1354,6 +1372,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderLabelDirectory(labels, lang),
         activePath: "/labels"
       })
@@ -1377,6 +1396,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderAuthorDirectory(authors, lang),
         activePath: "/authors"
       })
@@ -1412,6 +1432,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderPostPageBody({
           post,
           comments,
@@ -1460,6 +1481,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderPostPageBody({
             post,
             comments,
@@ -1516,6 +1538,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/account"
         }),
@@ -1583,6 +1606,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body,
         activePath: "/account"
       })
@@ -1608,6 +1632,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderPostEditorBody({ lang, mode: "create", isDraft: false, visibility: "public", actionPath: "/post" }),
         activePath: "/post"
       })
@@ -1641,6 +1666,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderPostEditorBody({
             lang,
             mode: "create",
@@ -1700,6 +1726,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/post"
         }),
@@ -1719,6 +1746,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser: c.get("currentUser"),
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderPostEditorBody({
           lang,
           mode: "edit",
@@ -1763,6 +1791,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/post"
         }),
@@ -1790,6 +1819,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderPostEditorBody({
             lang,
             mode: "edit",
@@ -1889,6 +1919,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body,
         activePath: "/admin"
       })
@@ -1945,6 +1976,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/account"
         }),
@@ -1990,6 +2022,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/account"
         }),
@@ -2035,6 +2068,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/account"
         }),
@@ -2053,6 +2087,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("userHasPosts", lang)),
           activePath: "/account"
         }),
@@ -2086,6 +2121,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         isAdmin: c.get("isAdmin") || false,
         currentUser,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body
       }),
       404

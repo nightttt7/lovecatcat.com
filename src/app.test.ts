@@ -18,6 +18,7 @@ describe("createApp", () => {
   let mockOptions: AppOptions;
   let request: ReturnType<typeof createAppTestContext>["request"];
   let createComment: ReturnType<typeof createAppTestContext>["createComment"];
+  let createPostDetail: ReturnType<typeof createAppTestContext>["createPostDetail"];
   let setSignedInUser: ReturnType<typeof createAppTestContext>["setSignedInUser"];
   let setSignedInAdmin: ReturnType<typeof createAppTestContext>["setSignedInAdmin"];
 
@@ -28,6 +29,7 @@ describe("createApp", () => {
     mockOptions = context.mockOptions;
     request = context.request;
     createComment = context.createComment;
+    createPostDetail = context.createPostDetail;
     setSignedInUser = context.setSignedInUser;
     setSignedInAdmin = context.setSignedInAdmin;
   });
@@ -99,8 +101,35 @@ describe("createApp", () => {
       expect(res.status).toBe(200);
       
       const html = await res.text();
-      expect(html).toContain("最新博文");
+      expect(html).toContain("所有博文");
+      expectHtmlFragmentsInOrder(html, [">所有博文<", 'href="/labels"', 'href="/authors"']);
       expect(html).toContain("暂无博文内容");
+    });
+
+    it("renders about and tools links in the header while keeping labels and authors out of it", async () => {
+      mockDb.getPostByTitle = async (title) => {
+        if (title === "About") {
+          return createPostDetail({ id: 21, title: "About" });
+        }
+
+        if (title === "Tools") {
+          return createPostDetail({ id: 22, title: "Tools" });
+        }
+
+        return null;
+      };
+
+      const app = createApp(mockOptions);
+      const res = await app.request("/");
+
+      expect(res.status).toBe(200);
+
+      const html = await res.text();
+  expectHtmlFragmentsInOrder(html, ['href=/posts/21', 'href=/posts/22']);
+      expect(html).toContain(">关于<");
+      expect(html).toContain(">工具<");
+      expect(html).not.toMatch(/<header>[\s\S]*href=\/labels/);
+      expect(html).not.toMatch(/<header>[\s\S]*href=\/authors/);
     });
 
     it("displays list of posts", async () => {
@@ -248,7 +277,7 @@ describe("createApp", () => {
       expect(res.status).toBe(200);
 
       const html = await res.text();
-      expect(html).toContain("Latest posts");
+      expect(html).toContain("All posts");
       expect(html).toContain("@ 2024-06-25");
       expect(html).not.toContain("2024年6月25日");
     });

@@ -4,7 +4,7 @@ export type TranslationKey = keyof typeof translations["zh"];
 
 export const translations = {
   zh: {
-    latestPosts: "最新博文",
+    latestPosts: "所有博文",
     noPosts: "暂无博文内容。",
     untitled: "无标题",
     author: "作者",
@@ -97,6 +97,7 @@ export const translations = {
     userHasPosts: "该账号仍有关联文章，无法直接删除。",
     pageNotFound: "页面不存在。",
     about: "关于",
+    tools: "工具",
     paginationNav: "分页",
     paginationPrevious: "上一页",
     paginationNext: "下一页",
@@ -106,7 +107,7 @@ export const translations = {
     langCode: "zh-CN",
   },
   en: {
-    latestPosts: "Latest posts",
+    latestPosts: "All posts",
     noPosts: "No posts found.",
     untitled: "Untitled",
     author: "Author",
@@ -199,6 +200,7 @@ export const translations = {
     userHasPosts: "This account still owns posts and cannot be deleted directly.",
     pageNotFound: "Page not found.",
     about: "About",
+    tools: "Tools",
     paginationNav: "Pagination",
     paginationPrevious: "Previous",
     paginationNext: "Next",
