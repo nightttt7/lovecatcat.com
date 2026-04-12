@@ -3,12 +3,14 @@ import { t, translations, type Lang } from "./i18n";
 
 describe("i18n utilities", () => {
   it("returns the requested translation for supported languages", () => {
-    expect(t("latestPosts", "zh")).toBe("最新博文");
-    expect(t("latestPosts", "en")).toBe("Latest posts");
+    expect(t("latestPosts", "zh")).toBe("所有博文");
+    expect(t("latestPosts", "en")).toBe("All posts");
+    expect(t("tools", "zh")).toBe("工具");
+    expect(t("tools", "en")).toBe("Tools");
   });
 
   it("falls back to Chinese when the language code is unsupported", () => {
-    expect(t("latestPosts", "fr" as Lang)).toBe("最新博文");
+    expect(t("latestPosts", "fr" as Lang)).toBe("所有博文");
   });
 
   it("keeps the translation key sets aligned across locales", () => {

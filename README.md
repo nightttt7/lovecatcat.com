@@ -9,6 +9,9 @@
 # Install dependencies
 npm install
 
+# Generate browser preview assets
+npm run build:assets
+
 # Local development
 npm run dev
 
@@ -25,16 +28,54 @@ npm run test:watch
 npm run test:coverage
 ```
 
+## Git Workflow
+
+This repository uses a simple solo-development branch model:
+
+- `dev` is the only long-lived development branch.
+- `master` is reserved for UAT-approved production releases.
+- Day-to-day coding, local verification, and preview deployment all happen from `dev`.
+- Production deployment happens only after the approved `dev` state has been merged into `master`.
+
+Each development cycle should follow this order:
+
+```bash
+# Stay on the solo development branch
+git switch dev
+
+# Develop and verify locally
+npm run dev
+npm run test
+
+# Deploy the current dev state to preview for UAT
+npm run deploy:preview
+
+# Run preview smoke tests / UAT at https://lovecatcat-preview.nightttt7.workers.dev
+
+# After UAT passes, close the public preview URL
+npm run deploy:preview:inactive
+
+# Merge the approved dev state into master
+git switch master
+git merge dev
+
+# Deploy production from master
+npm run deploy:production
+```
+
+If no special release branch is needed, keep working on `dev` for the next cycle and treat `master` only as the production-ready branch.
+
 ## Technology Stack
 
 - TypeScript 5.6
-- Hono 4.4
+- Hono 4.12
 - Node.js >= 20.18.1
 - Cloudflare Workers
 - Cloudflare D1
 - better-sqlite3 12.8
-- marked 12
-- Vitest 2.1
+- unified / remark / rehype
+- esbuild
+- Vitest 4.1
 - Wrangler 4.78
 
 ## Architecture
@@ -45,8 +86,9 @@ The project uses one shared application layer with two runtime entry points:
 - [src/server.ts](src/server.ts): local Node.js entry point wired to SQLite `dev.db`.
 - [src/worker.ts](src/worker.ts): Cloudflare Worker entry point wired to the D1 binding `DB`.
 - [src/db/sqlite.ts](src/db/sqlite.ts) and [src/db/d1.ts](src/db/d1.ts): separate SQLite and D1 adapters that expose the same `BlogDb` interface.
+- [src/markdown](src/markdown): shared Markdown rendering, sanitization, and browser preview logic.
 - [src/render/layout.ts](src/render/layout.ts): shared page layout rendering.
-- [src/utils](src/utils): shared logic for auth, access control, dates, language switching, Markdown, and related helpers.
+- [src/utils](src/utils): shared logic for auth, access control, dates, language switching, and related helpers.
 
 The data flow is:
 
@@ -63,9 +105,11 @@ The data flow is:
 │  ├─ worker.ts             # Cloudflare Worker entry
 │  ├─ config.ts             # Site configuration
 │  ├─ db/                   # SQLite / D1 data access layer and schema
+│  ├─ markdown/             # Shared Markdown render/sanitize/browser-preview modules
 │  ├─ render/               # Page layout rendering
-│  ├─ utils/                # Auth, access, dates, i18n, Markdown, and other helpers
+│  ├─ utils/                # Auth, access, dates, i18n, and other helpers
 │  └─ test/                 # Shared route-test factories and helpers
+├─ scripts/                 # Small build and maintenance scripts
 ├─ dev.db                   # Local development database
 ├─ wrangler.toml            # Cloudflare Workers / D1 configuration
 └─ package.json             # Scripts and dependencies
@@ -92,6 +136,7 @@ npm run dev
 Default URL: `http://localhost:3000`
 
 This mode uses only local Node.js and SQLite `dev.db`.
+`npm run dev` now runs `npm run build:assets` first so the browser-side Markdown preview bundle stays in sync with the shared Markdown source modules.
 
 ### Remote Preview
 
@@ -108,6 +153,9 @@ Cloudflare authentication must already be set up, and the preview-specific `ADMI
 ### Deploy
 
 ```bash
+# Start from the solo development branch
+git switch dev
+
 # Confirm the Cloudflare account and token are pointing to the correct account first
 npx wrangler whoami
 
@@ -123,7 +171,11 @@ npm run deploy:preview
 # After UAT, deactivate the preview URL while keeping the preview Worker and preview D1
 npm run deploy:preview:inactive
 
-# Deploy to production; the script explicitly targets the top-level production environment
+# Merge the approved dev state into master
+git switch master
+git merge dev
+
+# Deploy to production from master; the script explicitly targets the top-level production environment
 # Equivalent to: wrangler deploy --env=""
 npm run deploy:production
 ```
@@ -132,7 +184,7 @@ The current production Worker is `lovecatcat`, backed by database `lovecatcat-pr
 
 The preview Worker is `lovecatcat-preview`, backed by database `lovecatcat-preview`, with the stable preview URL `https://lovecatcat-preview.nightttt7.workers.dev`.
 
-Preview is intended only for short-lived UAT. After validation, run `npm run deploy:preview:inactive` to disable the `workers.dev` entry so it does not remain publicly accessible. Re-run `npm run deploy:preview` when the next UAT cycle starts.
+Preview is intended only for short-lived UAT from `dev`. After validation, run `npm run deploy:preview:inactive` to disable the `workers.dev` entry so it does not remain publicly accessible, then merge the approved `dev` state into `master` before running production deployment. Re-run `npm run deploy:preview` when the next UAT cycle starts.
 
 Before any deploy, confirm that `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `npx wrangler whoami` are all correct, and that `ADMIN_EMAILS` has been configured separately for preview and production.
 
@@ -187,15 +239,6 @@ database_name = "lovecatcat-preview"
 ```
 
 Preview D1, production D1, and local `dev.db` are maintained independently. They do not automatically share local mock accounts, posts, or comments. After deployment, account validation should use accounts that actually exist in the target environment database rather than assuming local seed data is present.
-
-If legacy migrated posts in `posts.body` still contain literal old escape sequences such as `\r\n`, `\"`, `\'`, or `\\`, run the D1 repair script included in the repository:
-
-```bash
-npx wrangler d1 execute lovecatcat-preview --remote --file scripts/d1/normalize-legacy-post-body-crlf.sql
-npx wrangler d1 execute lovecatcat-prod --remote --file scripts/d1/normalize-legacy-post-body-crlf.sql
-```
-
-This script normalizes one layer of escaped post-body content left behind by old SQL dumps, including literal `\r\n`, `\"`, `\'`, and `\\`, so migrated posts render correctly in both post detail and edit pages.
 
 ## Coding Standards
 

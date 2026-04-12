@@ -82,46 +82,45 @@ describe("renderLayout", () => {
       isAdmin: true,
       lang: "en",
       aboutPostId: 9,
+      toolsPostId: 10,
       body: "Body"
     });
 
     const html = result.toString();
-    expect(html).toMatch(/href="\/posts\/9"[\s\S]*>About<\/a/);
-    expect(html).toContain('href=/labels');
-    expect(html).toContain('href=/authors');
-    expect(html).toContain(">Labels<");
-    expect(html).toContain(">Authors<");
+    expect(html).toMatch(/href=\/posts\/9[\s\S]*>About<\/a/);
+    expect(html).toMatch(/href=\/posts\/10[\s\S]*>Tools<\/a/);
     expect(html).toContain('aria-label="Open menu"');
     expect(html).toContain("New post");
     expect(html).toContain("Admin dashboard");
   });
 
-  it("renders labels and authors links next to about in the header", () => {
+  it("renders tools link next to about in the header", () => {
     const result = renderLayout({
       title: "Test",
       description: "Test",
       site: mockSiteConfig,
       isAdmin: false,
       aboutPostId: 9,
+      toolsPostId: 10,
       body: "Body"
     });
 
     const html = result.toString();
-    expectHtmlFragmentsInOrder(html, ['href="/posts/9"', 'href=/labels', 'href=/authors']);
+    expectHtmlFragmentsInOrder(html, ['href=/posts/9', 'href=/posts/10']);
   });
 
-  it("localizes labels and authors links in Chinese by default", () => {
+  it("localizes tools link in Chinese by default", () => {
     const result = renderLayout({
       title: "Test",
       description: "Test",
       site: mockSiteConfig,
       isAdmin: false,
+      toolsPostId: 10,
       body: "Body"
     });
 
     const html = result.toString();
-    expect(html).toContain(">标签<");
-    expect(html).toContain(">作者<");
+    expect(html).toContain(">工具<");
   });
 
   it("renders a dedicated mobile menu panel instead of dropdown-menu styles", () => {
@@ -142,6 +141,7 @@ describe("renderLayout", () => {
     expect(html).not.toContain('class="dropdown-menu dropdown-menu-sw"');
     expect(mobilePanelMatch?.[0]).not.toContain('href=/labels');
     expect(mobilePanelMatch?.[0]).not.toContain('href=/authors');
+    expect(mobilePanelMatch?.[0]).not.toContain('>Tools<');
   });
 
   it("shows account and logout links for signed-in users", () => {
@@ -277,6 +277,23 @@ describe("renderLayout", () => {
     expect(html).toContain('@media (min-width: 544px) and (max-width: 767px)');
     expect(html).toContain('inline-size: 0');
     expect(html).toContain('overflow: hidden');
+  });
+
+  it("includes scoped ultra-wide post editor breakout styles", () => {
+    const result = renderLayout({
+      title: "Test",
+      description: "Test",
+      site: mockSiteConfig,
+      isAdmin: true,
+      body: '<div class="post-editor-breakout-shell"><div class="post-editor-breakout" data-post-editor-root><div class="post-editor-grid"></div></div></div>'
+    });
+
+    const html = result.toString();
+    expect(html).toContain('.post-editor-breakout-shell');
+    expect(html).toContain('.post-editor-breakout');
+    expect(html).toContain('@media (min-width: 1440px)');
+    expect(html).toContain('width: min(calc(100vw - 2rem), 126rem);');
+    expect(html).toContain('transform: translateX(-50%);');
   });
 
   it("keeps full pagination when the container can fit every link", () => {

@@ -40,14 +40,25 @@ describe("createApp admin and post editor routes", () => {
     expect(res.status).toBe(200);
 
     const html = await res.text();
-  const mainSection = getMainHtml(html);
+    const mainSection = getMainHtml(html);
     expect(html).toContain("发布文章");
     expect(html).toContain('form method="post" action="/post"');
     expect(html).toContain('id="title" name="title" type="text" class="form-control width-full" maxlength="200"');
     expect(html).toContain('id="tag" name="tag" type="text" class="form-control width-full" maxlength="200" required');
     expect(html).toContain('id="visibility" name="visibility" class="form-select width-full"');
     expect(html).toContain('option value="public" selected');
-    expect(html).toContain('id="body" name="body" class="form-control width-full" rows="18" required');
+    expect(html).toContain('id="body" name="body" class="form-control width-full post-editor-input" rows="18" required data-post-editor-input');
+    expect(html).toContain('class="mb-3 post-editor-breakout-shell"');
+    expect(html).toContain('class="post-editor-breakout" data-post-editor-root');
+    expect(html).toContain('data-post-editor-root');
+    expect(html).toContain('data-post-editor-pane="input"');
+    expect(html).toContain('data-post-editor-pane="preview"');
+    expect(html).toContain('data-post-editor-preview');
+    expect(html).toContain('data-post-editor-switch="input"');
+    expect(html).toContain('data-post-editor-switch="preview"');
+    expect(html).toContain('class="Box-body post-editor-pane-body"');
+    expect(html).toContain('src="/static/post-editor-preview.js"');
+    expect(html).not.toContain('class="f6 text-gray">正文</span>');
     expect(mainSection).not.toContain('href="/account"');
   });
 
@@ -170,20 +181,8 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain('value="news, updates"');
     expect(html).toContain('option value="private" selected');
     expect(html).toContain('name="isDraft" type="checkbox" checked');
+    expect(html).toContain('data-post-editor-empty-state="开始输入 Markdown，这里会即时显示预览。"');
     expect(html).toContain(">Existing body<");
-  });
-
-  it("normalizes legacy escaped line breaks before filling the edit textarea", async () => {
-    setSignedInAdmin();
-    mockDb.getPostById = async () => createPostDetail({ body: "line1\\r\\nline2" });
-
-    const res = await request("/post/7/edit", undefined, true);
-
-    expect(res.status).toBe(200);
-
-    const html = await res.text();
-    expect(html).toContain("line1\nline2");
-    expect(html).not.toContain("line1\\r\\nline2");
   });
 
   it("shows the edit validation error when the updated body is empty", async () => {

@@ -15,6 +15,7 @@ export type LayoutProps = {
   currentUser?: LayoutUser;
   lang?: Lang;
   aboutPostId?: number;
+  toolsPostId?: number;
   body: string | HtmlEscapedString | Promise<string | HtmlEscapedString>;
   activePath?: string;
 };
@@ -41,12 +42,15 @@ export const resolveResponsivePaginationMode = ({
   return compactWidth <= rootWidth ? "compact" : "minimal";
 };
 
-export const renderLayout = ({ title, description, site, isAdmin, currentUser = null, lang = "zh", aboutPostId, body, activePath }: LayoutProps) => {
+export const renderLayout = ({ title, description, site, isAdmin, currentUser = null, lang = "zh", aboutPostId, toolsPostId, body, activePath }: LayoutProps) => {
   const navLinks = site.navLinks.filter((link) => !link.requiresAdmin || isAdmin);
-  const directoryLinks = [
-    { href: "/labels", label: t("labels", lang), active: activePath === "/labels" },
-    { href: "/authors", label: t("authors", lang), active: activePath === "/authors" }
-  ];
+  const infoLinks: Array<{ href: string; label: string; active: boolean }> = [];
+  if (aboutPostId) {
+    infoLinks.push({ href: `/posts/${aboutPostId}`, label: t("about", lang), active: activePath === "/posts/" + aboutPostId });
+  }
+  if (toolsPostId) {
+    infoLinks.push({ href: `/posts/${toolsPostId}`, label: t("tools", lang), active: activePath === "/posts/" + toolsPostId });
+  }
   const getNavLabel = (label: string, labelKey?: keyof typeof import("../utils/i18n").translations["zh"]) => {
     return labelKey ? t(labelKey, lang) : label;
   };
@@ -332,6 +336,130 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
           .delete-confirm-submit {
             border: var(--borderWidth-thin) solid var(--button-danger-borderColor-rest, var(--color-btn-danger-hover-border));
           }
+
+          .post-editor-breakout-shell {
+            width: 100%;
+          }
+
+          .post-editor-breakout {
+            width: 100%;
+            max-width: 100%;
+          }
+
+          .post-editor-mobile-toggle {
+            display: none;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+          }
+
+          .post-editor-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            align-items: stretch;
+          }
+
+          .post-editor-pane {
+            min-width: 0;
+            display: flex;
+          }
+
+          .post-editor-pane[hidden] {
+            display: none !important;
+          }
+
+          .post-editor-panel {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            width: 100%;
+            min-width: 0;
+          }
+
+          .post-editor-panel .Box-header {
+            gap: 0.75rem;
+            min-height: 3rem;
+          }
+
+          .post-editor-pane-body {
+            display: flex;
+            flex: 1 1 auto;
+            min-height: clamp(30rem, 68vh, 52rem);
+            max-height: clamp(30rem, 68vh, 52rem);
+            min-width: 0;
+            width: 100%;
+          }
+
+          .post-editor-input {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+            resize: none;
+            overflow: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+            font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+          }
+
+          .post-editor-preview-frame {
+            flex: 1 1 auto;
+            min-height: 0;
+            max-height: none;
+            width: 100%;
+            overflow: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+          }
+
+          .post-editor-preview-frame[data-post-editor-empty="true"] {
+            color: var(--fgColor-muted);
+          }
+
+          .post-editor-preview-frame > :first-child {
+            margin-top: 0 !important;
+          }
+
+          .post-editor-preview-frame > :last-child {
+            margin-bottom: 0 !important;
+          }
+
+          @media (min-width: 1440px) {
+            .post-editor-breakout {
+              position: relative;
+              left: 50%;
+              width: min(calc(100vw - 2rem), 126rem);
+              max-width: none;
+              transform: translateX(-50%);
+            }
+          }
+
+          @media (max-width: 1011px) {
+            [data-post-editor-root] .post-editor-grid {
+              display: block;
+            }
+
+            [data-post-editor-root] [data-post-editor-pane="preview"] {
+              display: none;
+            }
+
+            [data-post-editor-root][data-post-editor-enhanced="true"] .post-editor-mobile-toggle {
+              display: flex;
+            }
+
+            [data-post-editor-root][data-post-editor-enhanced="true"] [data-post-editor-pane="preview"] {
+              display: block;
+            }
+
+            .post-editor-pane-body {
+              min-height: 24rem;
+              max-height: 24rem;
+            }
+
+            .post-editor-preview-frame {
+              max-height: none;
+            }
+          }
         </style>
       </head>
       <body class="bg-gray-light">
@@ -341,21 +469,7 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
               <div class="Header-item">
                 <a href="/" class="Header-link f4 text-bold">${site.siteName}</a>
               </div>
-              ${
-                aboutPostId
-                  ? html`
-                      <div class="Header-item">
-                        <a
-                          href="/posts/${aboutPostId}"
-                          class="Header-link ${activePath === "/posts/" + aboutPostId ? "text-bold" : ""}"
-                          ${activePath === "/posts/" + aboutPostId ? 'aria-current="page"' : ""}
-                          >${t("about", lang)}</a
-                        >
-                      </div>
-                    `
-                  : html``
-              }
-              ${directoryLinks.map((link) =>
+              ${infoLinks.map((link) =>
                 link.active
                   ? html`
                       <div class="Header-item">
@@ -405,21 +519,7 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
               <div class="Header-item">
                 <a href="/" class="Header-link f4 text-bold">${site.siteName}</a>
               </div>
-              ${
-                aboutPostId
-                  ? html`
-                      <div class="Header-item">
-                        <a
-                          href="/posts/${aboutPostId}"
-                          class="Header-link ${activePath === "/posts/" + aboutPostId ? "text-bold" : ""}"
-                          ${activePath === "/posts/" + aboutPostId ? 'aria-current="page"' : ""}
-                          >${t("about", lang)}</a
-                        >
-                      </div>
-                    `
-                  : html``
-              }
-              ${directoryLinks.map((link) =>
+              ${infoLinks.map((link) =>
                 link.active
                   ? html`
                       <div class="Header-item">

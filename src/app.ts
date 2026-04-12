@@ -3,16 +3,17 @@ import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { html, raw } from "hono/html";
 import { faviconIco } from "./assets/favicon";
+import { postEditorPreviewScript } from "./assets/post-editor-preview.generated";
 import { primerCss } from "./assets/primer";
 import type { SiteConfig } from "./config";
 import type { BlogDb, CommentRow, PostDetailRow, PostListRow, UserRow } from "./db/types";
+import { renderMarkdown } from "./markdown/render";
 import { renderLayout } from "./render/layout";
 import { canDeleteComment, canDeletePost, canEditOwnPost, canManageUser, hasAccess, type AccessUser } from "./utils/access";
 import { createSessionToken, hashPassword, hashSessionToken, normalizeEmail, verifyPassword } from "./utils/auth";
 import { formatDate } from "./utils/date";
 import { t, type Lang } from "./utils/i18n";
 import { buildTagValue, DEFAULT_POST_TAG, displayTagValues, isDraftTag, normalizeTagFilterValue, tagInputValue } from "./utils/post-tags";
-import { normalizeStoredMarkdown, renderMarkdown } from "./utils/markdown";
 
 type CurrentUser = {
   id: number;
@@ -32,6 +33,7 @@ export type AppEnv<TBindings extends Record<string, unknown> = Record<string, un
     isAdmin: boolean;
     lang: Lang;
     aboutPostId?: number;
+    toolsPostId?: number;
   };
 };
 
@@ -336,6 +338,7 @@ const renderPrivateBadge = (isPrivate: number | null | undefined, lang: Lang) =>
 
 const renderLabelDirectory = (labels: Array<{ tag: string; postCount: number }>, lang: Lang) => {
   return html`
+    ${renderHomeSectionNav("labels", lang)}
     <div class="d-flex flex-justify-between flex-items-center mb-4 flex-wrap">
       <h1 class="h2 mb-2">${t("labelsTitle", lang)}</h1>
     </div>
@@ -354,8 +357,64 @@ const renderLabelDirectory = (labels: Array<{ tag: string; postCount: number }>,
   `;
 };
 
+type HomeSectionNavKey = "posts" | "labels" | "authors";
+
+const renderHomeSectionNavLink = (href: string, label: string, isCurrent: boolean) => {
+  return html`<a href="${href}"${raw(isCurrent ? ' aria-current="page"' : "")} class="home-section-link h2 mb-2 mb-sm-0 text-bold color-fg-default">${label}</a>`;
+};
+
+const renderHomeSectionNav = (currentSection: HomeSectionNavKey, lang: Lang) => {
+  return html`
+    <style>
+      .home-section-link {
+        display: inline-block;
+        text-decoration: none;
+      }
+      .home-section-link:hover {
+        color: var(--fgColor-default);
+        text-decoration: underline dashed !important;
+      }
+      .home-section-separator {
+        color: var(--fgColor-muted);
+        font-weight: 400;
+      }
+    </style>
+    <nav class="d-flex flex-wrap flex-items-center mb-4" aria-label="${t("latestPosts", lang)}">
+      ${renderHomeSectionNavLink("/", t("latestPosts", lang), currentSection === "posts")}
+      <span class="home-section-separator h2 mb-2 mb-sm-0 mx-2" aria-hidden="true">|</span>
+      ${renderHomeSectionNavLink("/labels", t("labels", lang), currentSection === "labels")}
+      <span class="home-section-separator h2 mb-2 mb-sm-0 mx-2" aria-hidden="true">|</span>
+      ${renderHomeSectionNavLink("/authors", t("authors", lang), currentSection === "authors")}
+    </nav>
+  `;
+};
+
+const renderHomeSelectedFilters = ({
+  selectedTag,
+  selectedAuthorName,
+  lang
+}: {
+  selectedTag: string | null;
+  selectedAuthorName: string | null;
+  lang: Lang;
+}) => {
+  if (!selectedTag && !selectedAuthorName) {
+    return html``;
+  }
+
+  return html`
+    ${selectedTag
+      ? html`<div class="mb-4"><h1 class="h2 mb-2">#${selectedTag}</h1></div>`
+      : html``}
+    ${selectedAuthorName
+      ? html`<div class="mb-4"><h1 class="h2 mb-2">${t("author", lang)}: ${selectedAuthorName}</h1></div>`
+      : html``}
+  `;
+};
+
 const renderAuthorDirectory = (authors: Array<{ id: number; username: string | null; post_count: number }>, lang: Lang) => {
   return html`
+    ${renderHomeSectionNav("authors", lang)}
     <div class="d-flex flex-justify-between flex-items-center mb-4 flex-wrap">
       <h1 class="h2 mb-2">${t("authorsTitle", lang)}</h1>
     </div>
@@ -874,14 +933,48 @@ const renderPostEditorBody = ({
               <span class="ml-2">${t("postDraftLabel", lang)}</span>
             </label>
           </div>
-          <div class="mb-3">
-            <label class="d-block text-bold mb-2" for="body">${t("postBodyLabel", lang)}</label>
-            <textarea id="body" name="body" class="form-control width-full" rows="18" required>${bodyValue || ""}</textarea>
+          <div class="mb-3 post-editor-breakout-shell">
+            <div class="post-editor-breakout" data-post-editor-root>
+              <div class="d-flex flex-justify-between flex-items-center mb-2 flex-wrap">
+                <p class="f6 text-gray mb-0">${t("postEditorLiveHint", lang)}</p>
+              </div>
+              <div class="BtnGroup post-editor-mobile-toggle" aria-label="${t("postBodyLabel", lang)}">
+                <button type="button" class="btn BtnGroup-item btn-primary" data-post-editor-switch="input" aria-pressed="true">
+                  ${t("postEditorMarkdownTab", lang)}
+                </button>
+                <button type="button" class="btn BtnGroup-item" data-post-editor-switch="preview" aria-pressed="false">
+                  ${t("postEditorPreviewTab", lang)}
+                </button>
+              </div>
+              <div class="post-editor-grid">
+                <section class="post-editor-pane" data-post-editor-pane="input">
+                  <div class="Box color-bg-default post-editor-panel">
+                    <div class="Box-header d-flex flex-items-center">
+                      <label class="text-bold mb-0" for="body">${t("postEditorMarkdownTab", lang)}</label>
+                    </div>
+                    <div class="Box-body post-editor-pane-body">
+                      <textarea id="body" name="body" class="form-control width-full post-editor-input" rows="18" required data-post-editor-input>${bodyValue || ""}</textarea>
+                    </div>
+                  </div>
+                </section>
+                <section class="post-editor-pane" data-post-editor-pane="preview">
+                  <div class="Box color-bg-default post-editor-panel">
+                    <div class="Box-header d-flex flex-items-center">
+                      <h2 class="h4 mb-0">${t("postEditorPreviewTab", lang)}</h2>
+                    </div>
+                    <div class="Box-body post-editor-pane-body">
+                      <div class="markdown-body post-editor-preview-frame" data-post-editor-preview data-post-editor-empty-state="${t("postEditorPreviewEmpty", lang)}"></div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary">${t("savePost", lang)}</button>
         </form>
       </div>
     </div>
+    <script src="/static/post-editor-preview.js" defer></script>
   `;
 };
 
@@ -932,9 +1025,15 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     c.set("currentUser", currentUser);
     c.set("isAdmin", isAdmin);
 
-    const aboutPost = await db.getPostByTitle("About", { includeDrafts: isAdmin, viewerId: currentUser?.id ?? null });
+    const [aboutPost, toolsPost] = await Promise.all([
+      db.getPostByTitle("About", { includeDrafts: isAdmin, viewerId: currentUser?.id ?? null }),
+      db.getPostByTitle("Tools", { includeDrafts: isAdmin, viewerId: currentUser?.id ?? null })
+    ]);
     if (aboutPost) {
       c.set("aboutPostId", aboutPost.id);
+    }
+    if (toolsPost) {
+      c.set("toolsPostId", toolsPost.id);
     }
 
     await next();
@@ -951,6 +1050,12 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
   app.get("/static/primer.css", (c) => {
     return c.text(primerCss, 200, {
       "content-type": "text/css; charset=utf-8"
+    });
+  });
+
+  app.get("/static/post-editor-preview.js", (c) => {
+    return c.text(postEditorPreviewScript, 200, {
+      "content-type": "text/javascript; charset=utf-8"
     });
   });
 
@@ -982,6 +1087,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderAuthPageBody({ mode: "login", lang, nextPath }),
         activePath: "/login"
       })
@@ -1012,6 +1118,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderAuthPageBody({
             mode: "login",
             lang,
@@ -1039,6 +1146,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderAuthPageBody({
             mode: "login",
             lang,
@@ -1086,6 +1194,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderAuthPageBody({ mode: "signup", lang, nextPath }),
         activePath: "/signup"
       })
@@ -1128,6 +1237,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderAuthPageBody({
             mode: "signup",
             lang,
@@ -1178,6 +1288,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderAuthPageBody({
             mode: "signup",
             lang,
@@ -1224,12 +1335,16 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
     const paginationBasePath = paginationParams.size > 0 ? `/?${paginationParams.toString()}` : "/";
 
-    const [posts, total] = await Promise.all([
+    const [posts, total, selectedAuthor] = await Promise.all([
       db.listPosts({ includeDrafts: isAdmin, limit: PAGE_SIZE, offset, authorId, tag, viewerId }),
-      db.countPosts({ includeDrafts: isAdmin, authorId, tag, viewerId })
+      db.countPosts({ includeDrafts: isAdmin, authorId, tag, viewerId }),
+      authorId !== null ? db.getUserById(authorId) : Promise.resolve(null)
     ]);
 
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const selectedAuthorName = authorId !== null
+      ? selectedAuthor?.username ?? posts.find((post) => post.author_id === authorId)?.author_name ?? getUnknownAuthorLabel(lang)
+      : null;
 
     const body = html`
       <style>
@@ -1244,9 +1359,12 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           text-decoration: underline dashed !important;
         }
       </style>
-      <div class="d-flex flex-justify-between flex-items-center mb-4">
-        <h1 class="h2 mb-0">${t("latestPosts", lang)}</h1>
-      </div>
+      ${renderHomeSectionNav("posts", lang)}
+      ${renderHomeSelectedFilters({
+        selectedTag: tag,
+        selectedAuthorName,
+        lang
+      })}
       ${posts.length === 0
         ? renderNotice(t("noPosts", lang))
         : html`
@@ -1279,6 +1397,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body,
         activePath: "/"
       })
@@ -1313,6 +1432,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderLabelDirectory(labels, lang),
         activePath: "/labels"
       })
@@ -1336,6 +1456,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderAuthorDirectory(authors, lang),
         activePath: "/authors"
       })
@@ -1371,6 +1492,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderPostPageBody({
           post,
           comments,
@@ -1419,6 +1541,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderPostPageBody({
             post,
             comments,
@@ -1475,6 +1598,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/account"
         }),
@@ -1542,6 +1666,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body,
         activePath: "/account"
       })
@@ -1567,6 +1692,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderPostEditorBody({ lang, mode: "create", isDraft: false, visibility: "public", actionPath: "/post" }),
         activePath: "/post"
       })
@@ -1600,6 +1726,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser,
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderPostEditorBody({
             lang,
             mode: "create",
@@ -1659,6 +1786,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/post"
         }),
@@ -1678,6 +1806,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser: c.get("currentUser"),
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body: renderPostEditorBody({
           lang,
           mode: "edit",
@@ -1685,7 +1814,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           visibility: post.is_private ? "private" : "public",
           titleValue: post.title || "",
           tagValue: tagInputValue(post.tag),
-          bodyValue: normalizeStoredMarkdown(post.body),
+          bodyValue: post.body ?? "",
           actionPath: `/post/${post.id}/edit`
         }),
         activePath: "/post"
@@ -1722,6 +1851,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/post"
         }),
@@ -1749,6 +1879,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderPostEditorBody({
             lang,
             mode: "edit",
@@ -1848,6 +1979,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         currentUser,
         lang,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body,
         activePath: "/admin"
       })
@@ -1904,6 +2036,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/account"
         }),
@@ -1949,6 +2082,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/account"
         }),
@@ -1994,6 +2128,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
           activePath: "/account"
         }),
@@ -2012,6 +2147,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           currentUser: c.get("currentUser"),
           lang,
           aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("userHasPosts", lang)),
           activePath: "/account"
         }),
@@ -2045,6 +2181,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         isAdmin: c.get("isAdmin") || false,
         currentUser,
         aboutPostId: c.get("aboutPostId"),
+        toolsPostId: c.get("toolsPostId"),
         body
       }),
       404
