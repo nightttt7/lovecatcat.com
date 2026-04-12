@@ -9,6 +9,9 @@
 # Install dependencies
 npm install
 
+# Generate browser preview assets
+npm run build:assets
+
 # Local development
 npm run dev
 
@@ -65,13 +68,14 @@ If no special release branch is needed, keep working on `dev` for the next cycle
 ## Technology Stack
 
 - TypeScript 5.6
-- Hono 4.4
+- Hono 4.12
 - Node.js >= 20.18.1
 - Cloudflare Workers
 - Cloudflare D1
 - better-sqlite3 12.8
-- marked 12
-- Vitest 2.1
+- unified / remark / rehype
+- esbuild
+- Vitest 4.1
 - Wrangler 4.78
 
 ## Architecture
@@ -82,8 +86,9 @@ The project uses one shared application layer with two runtime entry points:
 - [src/server.ts](src/server.ts): local Node.js entry point wired to SQLite `dev.db`.
 - [src/worker.ts](src/worker.ts): Cloudflare Worker entry point wired to the D1 binding `DB`.
 - [src/db/sqlite.ts](src/db/sqlite.ts) and [src/db/d1.ts](src/db/d1.ts): separate SQLite and D1 adapters that expose the same `BlogDb` interface.
+- [src/markdown](src/markdown): shared Markdown rendering, sanitization, and browser preview logic.
 - [src/render/layout.ts](src/render/layout.ts): shared page layout rendering.
-- [src/utils](src/utils): shared logic for auth, access control, dates, language switching, Markdown, and related helpers.
+- [src/utils](src/utils): shared logic for auth, access control, dates, language switching, and related helpers.
 
 The data flow is:
 
@@ -100,9 +105,11 @@ The data flow is:
 │  ├─ worker.ts             # Cloudflare Worker entry
 │  ├─ config.ts             # Site configuration
 │  ├─ db/                   # SQLite / D1 data access layer and schema
+│  ├─ markdown/             # Shared Markdown render/sanitize/browser-preview modules
 │  ├─ render/               # Page layout rendering
-│  ├─ utils/                # Auth, access, dates, i18n, Markdown, and other helpers
+│  ├─ utils/                # Auth, access, dates, i18n, and other helpers
 │  └─ test/                 # Shared route-test factories and helpers
+├─ scripts/                 # Small build and maintenance scripts
 ├─ dev.db                   # Local development database
 ├─ wrangler.toml            # Cloudflare Workers / D1 configuration
 └─ package.json             # Scripts and dependencies
@@ -129,6 +136,7 @@ npm run dev
 Default URL: `http://localhost:3000`
 
 This mode uses only local Node.js and SQLite `dev.db`.
+`npm run dev` now runs `npm run build:assets` first so the browser-side Markdown preview bundle stays in sync with the shared Markdown source modules.
 
 ### Remote Preview
 
@@ -231,15 +239,6 @@ database_name = "lovecatcat-preview"
 ```
 
 Preview D1, production D1, and local `dev.db` are maintained independently. They do not automatically share local mock accounts, posts, or comments. After deployment, account validation should use accounts that actually exist in the target environment database rather than assuming local seed data is present.
-
-If legacy migrated posts in `posts.body` still contain literal old escape sequences such as `\r\n`, `\"`, `\'`, or `\\`, run the D1 repair script included in the repository:
-
-```bash
-npx wrangler d1 execute lovecatcat-preview --remote --file scripts/d1/normalize-legacy-post-body-crlf.sql
-npx wrangler d1 execute lovecatcat-prod --remote --file scripts/d1/normalize-legacy-post-body-crlf.sql
-```
-
-This script normalizes one layer of escaped post-body content left behind by old SQL dumps, including literal `\r\n`, `\"`, `\'`, and `\\`, so migrated posts render correctly in both post detail and edit pages.
 
 ## Coding Standards
 

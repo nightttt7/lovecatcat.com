@@ -3,17 +3,17 @@ import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { html, raw } from "hono/html";
 import { faviconIco } from "./assets/favicon";
-import { postEditorPreviewScript } from "./assets/post-editor-preview";
+import { postEditorPreviewScript } from "./assets/post-editor-preview.generated";
 import { primerCss } from "./assets/primer";
 import type { SiteConfig } from "./config";
 import type { BlogDb, CommentRow, PostDetailRow, PostListRow, UserRow } from "./db/types";
+import { renderMarkdown } from "./markdown/render";
 import { renderLayout } from "./render/layout";
 import { canDeleteComment, canDeletePost, canEditOwnPost, canManageUser, hasAccess, type AccessUser } from "./utils/access";
 import { createSessionToken, hashPassword, hashSessionToken, normalizeEmail, verifyPassword } from "./utils/auth";
 import { formatDate } from "./utils/date";
 import { t, type Lang } from "./utils/i18n";
 import { buildTagValue, DEFAULT_POST_TAG, displayTagValues, isDraftTag, normalizeTagFilterValue, tagInputValue } from "./utils/post-tags";
-import { normalizeStoredMarkdown, renderMarkdown } from "./utils/markdown";
 
 type CurrentUser = {
   id: number;
@@ -1726,7 +1726,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           visibility: post.is_private ? "private" : "public",
           titleValue: post.title || "",
           tagValue: tagInputValue(post.tag),
-          bodyValue: normalizeStoredMarkdown(post.body),
+          bodyValue: post.body ?? "",
           actionPath: `/post/${post.id}/edit`
         }),
         activePath: "/post"

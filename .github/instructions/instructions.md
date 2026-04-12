@@ -13,15 +13,15 @@ Both the frontend and backend use Hono. The app is deployed on Cloudflare Worker
 Admins must register and sign in using pre-approved email addresses configured through the `ADMIN_EMAILS` environment variable so they can publish posts and manage the site. Regular users use the existing registration/login flow for commenting, and GitHub OAuth is no longer used.
 Prefer Hono's official ecosystem where possible to reduce complexity. Frontend styling should consistently use local Primer CSS to maintain a minimal and coherent blog UI.
 The core capabilities already implemented are: home-page pagination, author filtering, post details, registration and login, comments, the personal account page, admin post creation/editing/drafts, comment deletion, user block/unblock/delete, and Chinese/English language switching.
-The capabilities not yet implemented are: local image upload, Cloudflare R2 integration, and in-editor Markdown live preview. When tasks touch these areas, treat them as future work rather than assuming reusable implementations already exist.
+The capabilities not yet implemented are: local image upload and Cloudflare R2 integration. When tasks touch these areas, treat them as future work rather than assuming reusable implementations already exist.
 The site structure is:
 Every page has a top banner that includes the home page and any future pages. After an admin signs in, `post` and `admin` links are also shown. The footer includes copyright text and external links such as GitHub.
 The home page includes a paginated list of blog posts with title, author, publish time, update time, and draft status. Each item links to its post detail page, and draft posts are visible only to signed-in admins.
 The post page includes the post title, author, publish time, update time, draft status, the full Markdown-rendered content, and a comment section. The comment section includes commenter name, content, and timestamp. Signed-in registered users can submit comments on the same page, but comments do not support Markdown. After signing in, admins can also delete posts, edit posts by navigating to the draft page, delete comments, and block users who wrote comments.
 The admin page currently includes: listing all comments, deleting comments, and blocking comment authors.
-The post page currently supports: entering a post title, tags, a body textarea, and saving as draft.
+The post page currently supports: entering a post title, tags, a body textarea, browser-side Markdown live preview, and saving as draft.
 The draft page is similar to the post page and reuses the existing `posts` table, but preloads existing content and allows it to be updated, saved, or published.
-If image upload, R2, or preview are implemented later, they should be added incrementally without breaking the current forms or the `posts` table structure.
+If image upload or R2 are implemented later, they should be added incrementally without breaking the current forms or the `posts` table structure.
 
 ### Steps
 1. Design the dual-environment data and storage strategy: use SQLite + D1 as the current foundation, unify field and index strategy, and keep `posts` / `comments` / `users` structurally aligned across dev and prod. Plan image storage and R2 separately as future extensions.
@@ -67,7 +67,7 @@ If image upload, R2, or preview are implemented later, they should be added incr
 4. Removed temporary migration scripts and outdated documents, and kept README plus instructions synchronized so unfinished capabilities are not described as already implemented.
 5. Completed the base UI refactor: switched fully to local Primer CSS and established shared visual rules for layout, post lists, post details, and comments.
 6. Clarified environment-variable and deployment rules: local development defaults to `.env` / `.env.development` plus `dev.db`, while Cloudflare operations use `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, Worker `ADMIN_EMAILS`, and D1 binding `DB`.
-7. Current editing capabilities are limited to title, tags, body textarea, and draft toggle. Image upload, R2 storage, and live editor preview are still pending.
+7. Current editing capabilities include title, tags, body textarea, shared Markdown live preview, and draft toggle. Image upload and R2 storage are still pending.
 8. Deployed the Worker to Cloudflare under the name `lovecatcat`. The production primary domain has been switched to `https://lovecatcat.com`, and production `workers.dev` has been disabled.
 9. Verified through Playwright MCP that the stable preview URL can load the app directly. The current deployment and remote-debug flow treats the independent preview environment as the only test entry point.
 10. Confirmed that production D1 currently holds independent site data and is not equivalent to local `dev.db`. Future production validation must not assume local admin test accounts already exist.

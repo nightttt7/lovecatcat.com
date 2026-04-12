@@ -185,19 +185,6 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain(">Existing body<");
   });
 
-  it("normalizes legacy escaped line breaks before filling the edit textarea", async () => {
-    setSignedInAdmin();
-    mockDb.getPostById = async () => createPostDetail({ body: "line1\\r\\nline2" });
-
-    const res = await request("/post/7/edit", undefined, true);
-
-    expect(res.status).toBe(200);
-
-    const html = await res.text();
-    expect(html).toContain("line1\nline2");
-    expect(html).not.toContain("line1\\r\\nline2");
-  });
-
   it("shows the edit validation error when the updated body is empty", async () => {
     setSignedInAdmin();
     mockDb.getPostById = async () => createPostDetail();
