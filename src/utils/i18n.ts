@@ -1,5 +1,7 @@
 export type Lang = "zh" | "en";
 
+export const siteLanguages = ["zh", "en"] as const;
+
 export type TranslationKey = keyof typeof translations["zh"];
 
 export const translations = {
@@ -73,6 +75,14 @@ export const translations = {
     postEditorPreviewTab: "预览",
     postEditorLiveHint: "浏览器即时渲染，宽屏双栏，窄屏点击切换。",
     postEditorPreviewEmpty: "开始输入 Markdown，这里会即时显示预览。",
+    postSourceLanguageLabel: "原文语言",
+    postSourceLanguageHint: "系统会根据标题和正文自动判定原文语言，你也可以手动改成更准确的语言。",
+    postSourceLanguageDetected: "系统判定",
+    postSourceLanguageZh: "中文",
+    postSourceLanguageEn: "英文",
+    translatedPostNotice: "当前阅读的是机器翻译版本。",
+    readOriginalPost: "阅读原文",
+    readTranslatedPost: "阅读翻译版",
     savePost: "保存",
     postBodyRequired: "正文不能为空。",
     privatePostBadge: "私密",
@@ -176,6 +186,14 @@ export const translations = {
     postEditorPreviewTab: "Preview",
     postEditorLiveHint: "Rendered instantly in the browser. Wide screens show both panes; narrow screens switch between them.",
     postEditorPreviewEmpty: "Start typing Markdown to see the preview here.",
+    postSourceLanguageLabel: "Source language",
+    postSourceLanguageHint: "The system auto-detects the source language from the title and body, but you can override it before saving.",
+    postSourceLanguageDetected: "Detected by system",
+    postSourceLanguageZh: "Chinese",
+    postSourceLanguageEn: "English",
+    translatedPostNotice: "You are reading a machine-translated version of this post.",
+    readOriginalPost: "Read original",
+    readTranslatedPost: "Read translated version",
     savePost: "Save",
     postBodyRequired: "Post body is required.",
     privatePostBadge: "Private",
@@ -213,4 +231,8 @@ export const translations = {
 
 export const t = (key: keyof typeof translations["zh"], lang: Lang) => {
   return translations[lang]?.[key] || translations["zh"][key];
+};
+
+export const isLang = (value: string): value is Lang => {
+  return siteLanguages.includes(value as Lang);
 };

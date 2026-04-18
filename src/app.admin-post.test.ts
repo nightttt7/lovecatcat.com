@@ -14,6 +14,7 @@ describe("createApp admin and post editor routes", () => {
   let request: ReturnType<typeof createAppTestContext>["request"];
   let submitForm: ReturnType<typeof createAppTestContext>["submitForm"];
   let createPostDetail: ReturnType<typeof createAppTestContext>["createPostDetail"];
+  let createPostTranslation: ReturnType<typeof createAppTestContext>["createPostTranslation"];
   let createComment: ReturnType<typeof createAppTestContext>["createComment"];
   let createUser: ReturnType<typeof createAppTestContext>["createUser"];
   let setSignedInAdmin: ReturnType<typeof createAppTestContext>["setSignedInAdmin"];
@@ -25,6 +26,7 @@ describe("createApp admin and post editor routes", () => {
     request = context.request;
     submitForm = context.submitForm;
     createPostDetail = context.createPostDetail;
+    createPostTranslation = context.createPostTranslation;
     createComment = context.createComment;
     createUser = context.createUser;
     setSignedInAdmin = context.setSignedInAdmin;
@@ -46,6 +48,8 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain('id="title" name="title" type="text" class="form-control width-full" maxlength="200"');
     expect(html).toContain('id="tag" name="tag" type="text" class="form-control width-full" maxlength="200" required');
     expect(html).toContain('id="visibility" name="visibility" class="form-select width-full"');
+    expect(html).toContain('id="source-lang" name="sourceLang" class="form-select width-full"');
+    expect(html).toContain("系统判定");
     expect(html).toContain('option value="public" selected');
     expect(html).toContain('id="body" name="body" class="form-control width-full post-editor-input" rows="18" required data-post-editor-input');
     expect(html).toContain('class="mb-3 post-editor-breakout-shell"');
@@ -181,8 +185,40 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain('value="news, updates"');
     expect(html).toContain('option value="private" selected');
     expect(html).toContain('name="isDraft" type="checkbox" checked');
+    expect(html).toContain('option value="zh" selected');
     expect(html).toContain('data-post-editor-empty-state="开始输入 Markdown，这里会即时显示预览。"');
     expect(html).toContain(">Existing body<");
+  });
+
+  it("renders translated posts with a translation notice and lets readers switch back to the original", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7", { headers: { cookie: "lang=en" } });
+
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    expect(html).toContain("Translated title");
+    expect(html).toContain("Translated body");
+    expect(html).toContain("machine-translated version");
+    expect(html).toContain('href="/posts/7?view=original"');
+  });
+
+  it("renders the original post body when the reader explicitly requests it", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7?view=original", { headers: { cookie: "lang=en" } });
+
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    expect(html).toContain("原文标题");
+    expect(html).toContain("原文内容");
+    expect(html).toContain('href="/posts/7?view=translation"');
   });
 
   it("shows the edit validation error when the updated body is empty", async () => {
@@ -320,6 +356,7 @@ describe("createApp admin and post editor routes", () => {
       id: 7,
       title: "Updated",
       body: "Updated body",
+      sourceLang: "en",
       tag: "notes",
       isPrivate: false
     });
@@ -345,6 +382,7 @@ describe("createApp admin and post editor routes", () => {
       id: 7,
       title: "Updated",
       body: "Updated body",
+      sourceLang: "en",
       tag: "notes",
       isPrivate: true
     });

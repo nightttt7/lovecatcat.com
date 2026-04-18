@@ -1,3 +1,5 @@
+export type PostTranslationStatus = "pending" | "processing" | "completed" | "failed" | "stale";
+
 export type PostListRow = {
   id: number;
   title: string | null;
@@ -5,6 +7,7 @@ export type PostListRow = {
   tag: string | null;
   author_id: number | null;
   author_name: string | null;
+  source_lang?: string | null;
   is_draft: number | null;
   is_private?: number | null;
 };
@@ -17,8 +20,23 @@ export type PostDetailRow = {
   tag: string | null;
   author_id: number | null;
   author_name: string | null;
+  source_lang?: string | null;
   is_draft: number | null;
   is_private?: number | null;
+};
+
+export type PostTranslationRow = {
+  id: number;
+  post_id: number;
+  lang: string;
+  translated_title: string | null;
+  translated_body: string | null;
+  status: PostTranslationStatus | null;
+  source_hash: string | null;
+  provider: string | null;
+  error_message: string | null;
+  is_machine_translation: number | null;
+  translated_at: string | null;
 };
 
 export type CommentRow = {
@@ -94,6 +112,7 @@ export type CreatePostInput = {
   body: string;
   timestamp: string;
   authorId: number;
+  sourceLang: string;
   tag: string;
   isPrivate: boolean;
 };
@@ -102,8 +121,22 @@ export type UpdatePostInput = {
   id: number;
   title: string | null;
   body: string;
+  sourceLang: string;
   tag: string;
   isPrivate: boolean;
+};
+
+export type UpsertPostTranslationInput = {
+  postId: number;
+  lang: string;
+  translatedTitle: string | null;
+  translatedBody: string | null;
+  status: PostTranslationStatus;
+  sourceHash: string;
+  provider: string | null;
+  errorMessage?: string | null;
+  isMachineTranslation: boolean;
+  translatedAt: string | null;
 };
 
 export type CreateSessionInput = {
@@ -138,6 +171,9 @@ export type BlogDb = {
   listPostsByAuthor: (authorId: number, includeDrafts: boolean, viewerId?: number | null) => Promise<PostListRow[]>;
   createPost: (input: CreatePostInput) => Promise<number>;
   updatePost: (input: UpdatePostInput) => Promise<void>;
+  getPostTranslation: (postId: number, lang: string) => Promise<PostTranslationRow | null>;
+  listPostTranslations: (postId: number) => Promise<PostTranslationRow[]>;
+  upsertPostTranslation: (input: UpsertPostTranslationInput) => Promise<void>;
   deletePost: (id: number) => Promise<void>;
   createSession: (input: CreateSessionInput) => Promise<void>;
   getSessionUserByTokenHash: (tokenHash: string, now: string) => Promise<SessionUserRow | null>;

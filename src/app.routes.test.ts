@@ -286,9 +286,20 @@ describe("createApp route flows", () => {
       body: "Body",
       timestamp: state.createdPost?.timestamp ?? "",
       authorId: 5,
+      sourceLang: "en",
       tag: "news,draft",
       isPrivate: false
     });
+    expect(state.upsertedTranslations).toHaveLength(1);
+    expect(state.upsertedTranslations[0]).toMatchObject({
+      postId: 77,
+      lang: "zh",
+      status: "pending",
+      isMachineTranslation: true
+    });
+    expect(state.enqueuedTranslationJobs).toEqual([
+      expect.objectContaining({ postId: 77, sourceLang: "en", targetLang: "zh", trigger: "create" })
+    ]);
   });
 
   it("creates private posts for admin users", async () => {
@@ -312,9 +323,11 @@ describe("createApp route flows", () => {
       body: "Body",
       timestamp: state.createdPost?.timestamp ?? "",
       authorId: 5,
+      sourceLang: "en",
       tag: "notes",
       isPrivate: true
     });
+    expect(state.upsertedTranslations).toHaveLength(1);
   });
 
   it("shows the authored-posts guard when deleting a user", async () => {

@@ -63,6 +63,11 @@ export const addPostsPrivateColumnSql = `
   ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0
 `;
 
+export const addPostsSourceLangColumnSql = `
+  ALTER TABLE posts
+  ADD COLUMN source_lang TEXT NOT NULL DEFAULT 'zh'
+`;
+
 export const backfillCommentUserIdsSql = `
   UPDATE comments
   SET user_id = (
@@ -83,8 +88,26 @@ export const createPostsTableWithRequiredTagSql = `
     timestamp DATETIME,
     author_id INTEGER,
     is_private INTEGER NOT NULL DEFAULT 0,
+    source_lang TEXT NOT NULL DEFAULT 'zh',
     tag TEXT NOT NULL,
     FOREIGN KEY (author_id) REFERENCES users(id)
+  )
+`;
+
+export const createPostTranslationsTableSql = `
+  CREATE TABLE IF NOT EXISTS post_translations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id INTEGER NOT NULL,
+    lang TEXT NOT NULL,
+    translated_title TEXT,
+    translated_body TEXT,
+    status TEXT NOT NULL,
+    source_hash TEXT NOT NULL,
+    provider TEXT,
+    error_message TEXT,
+    is_machine_translation INTEGER NOT NULL DEFAULT 1,
+    translated_at DATETIME,
+    FOREIGN KEY (post_id) REFERENCES posts(id)
   )
 `;
 
@@ -96,4 +119,19 @@ export const createPostsTimestampIndexSql = `
 export const createPostsAuthorIndexSql = `
   CREATE INDEX IF NOT EXISTS idx_posts_author_id
   ON posts(author_id)
+`;
+
+export const createPostTranslationsPostLangIndexSql = `
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_post_translations_post_id_lang
+  ON post_translations(post_id, lang)
+`;
+
+export const createPostTranslationsPostStatusIndexSql = `
+  CREATE INDEX IF NOT EXISTS idx_post_translations_post_id_status
+  ON post_translations(post_id, status)
+`;
+
+export const createPostTranslationsLangStatusIndexSql = `
+  CREATE INDEX IF NOT EXISTS idx_post_translations_lang_status
+  ON post_translations(lang, status)
 `;

@@ -12,8 +12,10 @@ import { renderLayout } from "./render/layout";
 import { canDeleteComment, canDeletePost, canEditOwnPost, canManageUser, hasAccess, type AccessUser } from "./utils/access";
 import { createSessionToken, hashPassword, hashSessionToken, normalizeEmail, verifyPassword } from "./utils/auth";
 import { formatDate } from "./utils/date";
-import { t, type Lang } from "./utils/i18n";
+import { isLang, siteLanguages, t, type Lang } from "./utils/i18n";
 import { buildTagValue, DEFAULT_POST_TAG, displayTagValues, isDraftTag, normalizeTagFilterValue, tagInputValue } from "./utils/post-tags";
+import { detectPostSourceLanguage, getTranslationTargetLanguages, hashPostTranslationSource, normalizeSelectedSourceLanguage } from "./translation/content";
+import type { TranslationJobMessage, TranslationJobTrigger } from "./translation/types";
 
 type CurrentUser = {
   id: number;
@@ -42,6 +44,7 @@ export type AppOptions<TBindings extends Record<string, unknown> = Record<string
   getDb: (c: Context<AppEnv<TBindings>>) => BlogDb;
   getIsAdmin?: (c: Context<AppEnv<TBindings>>) => boolean;
   getAdminEmails?: (c: Context<AppEnv<TBindings>>) => string[];
+  enqueueTranslationJobs?: (c: Context<AppEnv<TBindings>>, jobs: TranslationJobMessage[]) => Promise<void>;
 };
 
 const PAGE_SIZE = 10;
@@ -105,6 +108,74 @@ const isChecked = (body: FormBody, key: string) => {
 
 const getPostVisibilityValue = (body: FormBody) => {
   return getTrimmedFormValue(body, "visibility") === "private" ? "private" : "public";
+};
+
+const getSourceLanguageValue = (body: FormBody, detectedLanguage: Lang) => {
+  return normalizeSelectedSourceLanguage(getTrimmedFormValue(body, "sourceLang"), detectedLanguage);
+};
+
+const getLanguageLabelKey = (value: Lang) => {
+  return value === "zh" ? "postSourceLanguageZh" : "postSourceLanguageEn";
+};
+
+const buildPostViewHref = (postId: number, view: "original" | "translation") => {
+  return view === "original" ? `/posts/${postId}?view=original` : `/posts/${postId}?view=translation`;
+};
+
+const syncPostTranslationState = async <TBindings extends Record<string, unknown>>({
+  c,
+  db,
+  postId,
+  title,
+  body,
+  sourceLang,
+  trigger,
+  options
+}: {
+  c: Context<AppEnv<TBindings>>;
+  db: BlogDb;
+  postId: number;
+  title: string | null;
+  body: string;
+  sourceLang: Lang;
+  trigger: TranslationJobTrigger;
+  options: AppOptions<TBindings>;
+}) => {
+  const sourceHash = hashPostTranslationSource({ title, body, sourceLang });
+  const jobs: TranslationJobMessage[] = [];
+
+  for (const targetLang of getTranslationTargetLanguages(sourceLang)) {
+    const existingTranslation = await db.getPostTranslation(postId, targetLang);
+
+    if (existingTranslation?.source_hash === sourceHash && existingTranslation.status === "completed") {
+      continue;
+    }
+
+    await db.upsertPostTranslation({
+      postId,
+      lang: targetLang,
+      translatedTitle: existingTranslation?.translated_title ?? null,
+      translatedBody: existingTranslation?.translated_body ?? null,
+      status: existingTranslation?.translated_body || existingTranslation?.translated_title ? "stale" : "pending",
+      sourceHash,
+      provider: existingTranslation?.provider ?? "workers-ai:@cf/meta/m2m100-1.2b",
+      errorMessage: null,
+      isMachineTranslation: true,
+      translatedAt: existingTranslation?.translated_at ?? null
+    });
+
+    jobs.push({
+      postId,
+      sourceLang,
+      targetLang,
+      sourceHash,
+      trigger
+    });
+  }
+
+  if (jobs.length > 0) {
+    await options.enqueueTranslationJobs?.(c, jobs);
+  }
 };
 
 const getRequestProtocol = <TBindings extends Record<string, unknown>>(c: Context<AppEnv<TBindings>>) => {
@@ -739,6 +810,9 @@ const renderPostPageBody = ({
   lang,
   currentUser,
   accessUser,
+  renderedTitle,
+  renderedBody,
+  translationNotice,
   commentError,
   commentValue
 }: {
@@ -747,17 +821,20 @@ const renderPostPageBody = ({
   lang: Lang;
   currentUser: CurrentUser | null;
   accessUser: AccessUser;
+  renderedTitle: string | null;
+  renderedBody: string;
+  translationNotice?: ReturnType<typeof html>;
   commentError?: string;
   commentValue?: string;
 }) => {
-  const contentHtml = renderMarkdown(post.body ?? "");
+  const contentHtml = renderMarkdown(renderedBody);
 
   return html`
     <article class="Box box-shadow mb-4">
       <div class="Box-header">
         <div class="action-card-row">
           <div class="action-card-main">
-            <h1 class="h1 mb-2">${post.title || t("untitled", lang)}</h1>
+            <h1 class="h1 mb-2">${renderedTitle || t("untitled", lang)}</h1>
             <div class="f5 text-gray action-card-meta">
               ${renderPostTagLabels(post.tag)}
               <span>${renderHomeAuthorText(post.author_id, post.author_name, lang)}</span>
@@ -788,6 +865,7 @@ const renderPostPageBody = ({
         </div>
       </div>
       <div class="Box-body">
+        ${translationNotice ?? html``}
         <div class="markdown-body mt-3">${raw(contentHtml)}</div>
       </div>
     </article>
@@ -892,7 +970,9 @@ const renderPostEditorBody = ({
   tagValue,
   isDraft,
   visibility,
-  actionPath
+  actionPath,
+  selectedSourceLang,
+  detectedSourceLang
 }: {
   lang: Lang;
   mode: "create" | "edit";
@@ -903,6 +983,8 @@ const renderPostEditorBody = ({
   isDraft: boolean;
   visibility: "public" | "private";
   actionPath: string;
+  selectedSourceLang: Lang;
+  detectedSourceLang: Lang;
 }) => {
   return html`
     <div class="d-flex flex-justify-between flex-items-center mb-4 flex-wrap">
@@ -932,6 +1014,13 @@ const renderPostEditorBody = ({
               <input id="is-draft" name="isDraft" type="checkbox" ${isDraft ? "checked" : ""} />
               <span class="ml-2">${t("postDraftLabel", lang)}</span>
             </label>
+          </div>
+          <div class="mb-3">
+            <label class="d-block text-bold mb-2" for="source-lang">${t("postSourceLanguageLabel", lang)}</label>
+            <select id="source-lang" name="sourceLang" class="form-select width-full">
+              ${siteLanguages.map((language) => html`<option value="${language}" ${selectedSourceLang === language ? "selected" : ""}>${t(getLanguageLabelKey(language), lang)}</option> `)}
+            </select>
+            <p class="f6 text-gray mt-2 mb-0">${t("postSourceLanguageHint", lang)} ${t("postSourceLanguageDetected", lang)}: ${t(getLanguageLabelKey(detectedSourceLang), lang)}</p>
           </div>
           <div class="mb-3 post-editor-breakout-shell">
             <div class="post-editor-breakout" data-post-editor-root>
@@ -1340,6 +1429,22 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       db.countPosts({ includeDrafts: isAdmin, authorId, tag, viewerId }),
       authorId !== null ? db.getUserById(authorId) : Promise.resolve(null)
     ]);
+    const postTitleDisplays = await Promise.all(
+      posts.map(async (post) => {
+        const sourceLang = post.source_lang && isLang(post.source_lang) ? post.source_lang : "zh";
+        if (sourceLang === lang) {
+          return { postId: post.id, title: post.title };
+        }
+
+        const translation = await db.getPostTranslation(post.id, lang);
+        if (translation?.status === "completed" && translation.translated_title) {
+          return { postId: post.id, title: translation.translated_title };
+        }
+
+        return { postId: post.id, title: post.title };
+      })
+    );
+    const postTitleDisplayMap = new Map(postTitleDisplays.map((entry) => [entry.postId, entry.title]));
 
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const selectedAuthorName = authorId !== null
@@ -1372,7 +1477,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
               html`<article class="Box box-shadow mb-3">
                 <div class="Box-body">
                   <h2 class="h3 mb-2">
-                    <a href="/posts/${post.id}" class="text-bold color-fg-default post-title-link" title="${post.title || t("untitled", lang)}">${post.title || t("untitled", lang)}</a>
+                    <a href="/posts/${post.id}" class="text-bold color-fg-default post-title-link" title="${postTitleDisplayMap.get(post.id) || post.title || t("untitled", lang)}">${postTitleDisplayMap.get(post.id) || post.title || t("untitled", lang)}</a>
                   </h2>
                   <div class="f6 text-gray">
                     ${renderPostTagLabels(post.tag)}
@@ -1480,12 +1585,33 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       return c.notFound();
     }
 
+    const sourceLang = post.source_lang && isLang(post.source_lang) ? post.source_lang : "zh";
+    const viewMode = c.req.query("view") === "original" ? "original" : "translation";
+    const preferredTranslation = lang !== sourceLang ? await db.getPostTranslation(postId, lang) : null;
+    const canRenderTranslation = preferredTranslation?.status === "completed" && Boolean(preferredTranslation.translated_body);
+    const shouldUseTranslation = lang !== sourceLang && viewMode !== "original" && canRenderTranslation;
+    const renderedTitle = shouldUseTranslation ? preferredTranslation?.translated_title ?? post.title : post.title;
+    const renderedBody = shouldUseTranslation ? preferredTranslation?.translated_body ?? post.body ?? "" : post.body ?? "";
     const comments = await db.listComments(postId);
     const accessUser = getAccessUser(c);
+    const translationNotice = lang !== sourceLang && canRenderTranslation
+      ? html`
+          <div class="flash flash-warn mb-3">
+            <div class="d-flex flex-justify-between flex-items-center flex-wrap">
+              <span>${t("translatedPostNotice", lang)}</span>
+              <span class="mt-2 mt-sm-0">
+                ${shouldUseTranslation
+                  ? html`<a href="${buildPostViewHref(post.id, "original")}" class="btn btn-sm">${t("readOriginalPost", lang)}</a>`
+                  : html`<a href="${buildPostViewHref(post.id, "translation")}" class="btn btn-sm">${t("readTranslatedPost", lang)}</a>`}
+              </span>
+            </div>
+          </div>
+        `
+      : undefined;
 
     return c.html(
       renderLayout({
-        title: post.title || site.siteName,
+        title: renderedTitle || site.siteName,
         description: site.siteDescription,
         site,
         isAdmin,
@@ -1498,7 +1624,10 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           comments,
           lang,
           currentUser,
-          accessUser
+          accessUser,
+          renderedTitle,
+          renderedBody,
+          translationNotice
         }),
         activePath: "/posts/" + post.id
       })
@@ -1548,6 +1677,8 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
             lang,
             currentUser,
             accessUser,
+            renderedTitle: post.title,
+            renderedBody: post.body ?? "",
             commentError: t("commentRequired", lang),
             commentValue
           }),
@@ -1693,7 +1824,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         lang,
         aboutPostId: c.get("aboutPostId"),
         toolsPostId: c.get("toolsPostId"),
-        body: renderPostEditorBody({ lang, mode: "create", isDraft: false, visibility: "public", actionPath: "/post" }),
+        body: renderPostEditorBody({ lang, mode: "create", isDraft: false, visibility: "public", actionPath: "/post", selectedSourceLang: lang, detectedSourceLang: lang }),
         activePath: "/post"
       })
     );
@@ -1712,6 +1843,8 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const titleValue = getTrimmedFormValue(body, "title");
     const tagValue = getTrimmedFormValue(body, "tag");
     const postBodyValue = getRawFormValue(body, "body").trim();
+    const detectedSourceLang = detectPostSourceLanguage(titleValue, postBodyValue, lang);
+    const sourceLang = getSourceLanguageValue(body, detectedSourceLang);
     const draft = isChecked(body, "isDraft");
     const visibility = getPostVisibilityValue(body);
     const error = !tagValue ? t("postTagRequired", lang) : !postBodyValue ? t("postBodyRequired", lang) : null;
@@ -1736,7 +1869,9 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
             tagValue,
             bodyValue: postBodyValue,
             error: error ?? t("postBodyRequired", lang),
-            actionPath: "/post"
+            actionPath: "/post",
+            selectedSourceLang: sourceLang,
+            detectedSourceLang
           }),
           activePath: "/post"
         }),
@@ -1750,8 +1885,20 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       body: postBodyValue,
       timestamp: new Date().toISOString(),
       authorId: currentUser.id,
+      sourceLang,
       tag: buildTagValue(tagValue, draft) ?? DEFAULT_POST_TAG,
       isPrivate: visibility === "private"
+    });
+
+    await syncPostTranslationState({
+      c,
+      db,
+      postId: newPostId,
+      title: titleValue || null,
+      body: postBodyValue,
+      sourceLang,
+      trigger: "create",
+      options
     });
 
     return c.redirect(`/posts/${newPostId}`);
@@ -1796,6 +1943,8 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
 
     const site = options.getSite(c);
     const lang = c.get("lang");
+    const detectedSourceLang = detectPostSourceLanguage(post.title ?? "", post.body ?? "", post.source_lang && isLang(post.source_lang) ? post.source_lang : lang);
+    const selectedSourceLang = post.source_lang && isLang(post.source_lang) ? post.source_lang : detectedSourceLang;
 
     return c.html(
       renderLayout({
@@ -1815,7 +1964,9 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           titleValue: post.title || "",
           tagValue: tagInputValue(post.tag),
           bodyValue: post.body ?? "",
-          actionPath: `/post/${post.id}/edit`
+          actionPath: `/post/${post.id}/edit`,
+          selectedSourceLang,
+          detectedSourceLang
         }),
         activePath: "/post"
       })
@@ -1865,6 +2016,8 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const titleValue = getTrimmedFormValue(body, "title");
     const tagValue = getTrimmedFormValue(body, "tag");
     const postBodyValue = getRawFormValue(body, "body").trim();
+    const detectedSourceLang = detectPostSourceLanguage(titleValue, postBodyValue, post.source_lang && isLang(post.source_lang) ? post.source_lang : lang);
+    const sourceLang = getSourceLanguageValue(body, detectedSourceLang);
     const draft = isChecked(body, "isDraft");
     const visibility = getPostVisibilityValue(body);
     const error = !tagValue ? t("postTagRequired", lang) : !postBodyValue ? t("postBodyRequired", lang) : null;
@@ -1889,7 +2042,9 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
             tagValue,
             bodyValue: postBodyValue,
             error,
-            actionPath: `/post/${postId}/edit`
+            actionPath: `/post/${postId}/edit`,
+            selectedSourceLang: sourceLang,
+            detectedSourceLang
           }),
           activePath: "/post"
         }),
@@ -1901,8 +2056,20 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       id: postId,
       title: titleValue || null,
       body: postBodyValue,
+      sourceLang,
       tag: buildTagValue(tagValue, draft) ?? DEFAULT_POST_TAG,
       isPrivate: visibility === "private"
+    });
+
+    await syncPostTranslationState({
+      c,
+      db,
+      postId,
+      title: titleValue || null,
+      body: postBodyValue,
+      sourceLang,
+      trigger: "update",
+      options
     });
 
     return c.redirect(`/posts/${postId}`);

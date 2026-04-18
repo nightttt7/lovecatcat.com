@@ -89,10 +89,15 @@ The project uses one shared application layer with two runtime entry points:
 - [src/markdown](src/markdown): shared Markdown rendering, sanitization, and browser preview logic.
 - [src/render/layout.ts](src/render/layout.ts): shared page layout rendering.
 - [src/utils](src/utils): shared logic for auth, access control, dates, language switching, and related helpers.
+- [src/translation](src/translation): source-language detection, translation hashing, Workers AI integration, and queue message types.
 
 The data flow is:
 
 `request -> Hono routes -> BlogDb adapter -> SQLite or D1 -> HTML response`
+
+The async translation flow is:
+
+`post save -> source-language detection -> source post saved -> translation rows marked pending/stale -> Cloudflare Queue job -> Worker consumer -> Workers AI translation -> D1 post_translations update`
 
 ## Project Structure
 
@@ -107,6 +112,7 @@ The data flow is:
 │  ├─ db/                   # SQLite / D1 data access layer and schema
 │  ├─ markdown/             # Shared Markdown render/sanitize/browser-preview modules
 │  ├─ render/               # Page layout rendering
+│  ├─ translation/          # Source-language detection and async translation pipeline
 │  ├─ utils/                # Auth, access, dates, i18n, and other helpers
 │  └─ test/                 # Shared route-test factories and helpers
 ├─ scripts/                 # Small build and maintenance scripts
@@ -118,6 +124,15 @@ The data flow is:
 ## Available Routes
 
 The main routes currently include the home page `/`, post details `/posts/:id`, comment submission `/posts/:id/comments`, authentication `/login` `/signup` `/logout`, the account page `/account`, admin post creation and editing `/post` `/post/:id/edit`, the admin dashboard `/admin`, user management `/admin/users/:id/block` `/unblock` `/delete`, and language switching via `/api/lang`.
+
+## Translation Pipeline
+
+- `posts` remains the canonical source-content table.
+- `post_translations` stores per-language machine-translated variants and their statuses.
+- The post editor auto-detects source language from the title and body and lets the author override it before save.
+- Post create and post edit currently mark target-language rows as `pending` or `stale` and enqueue async translation jobs.
+- Post detail pages prefer the reader's current UI language when a completed translation exists and show a visible original/translated toggle.
+- `npm run dev` uses a no-op translation queue hook for local Node.js work; the async translation pipeline is exercised in the Worker runtime through `wrangler dev --remote`, preview, and production.
 
 ## Getting Started
 
@@ -149,6 +164,8 @@ Default URL: `http://127.0.0.1:8787`.
 It always connects to the preview environment, which means Worker `lovecatcat-preview` and remote D1 `lovecatcat-preview`.
 
 Cloudflare authentication must already be set up, and the preview-specific `ADMIN_EMAILS` secret must be configured separately.
+
+This mode also exercises the async translation pipeline because the Worker runtime uses the `AI` and `TRANSLATION_QUEUE` bindings from [wrangler.toml](wrangler.toml).
 
 ### Deploy
 
@@ -237,6 +254,11 @@ database_name = "lovecatcat-prod"
 binding = "DB"
 database_name = "lovecatcat-preview"
 ```
+
+The translation pipeline also depends on two Cloudflare bindings configured in [wrangler.toml](wrangler.toml):
+
+- `AI`: Workers AI binding used by the queue consumer for translation.
+- `TRANSLATION_QUEUE`: Cloudflare Queue used for async translation jobs.
 
 Preview D1, production D1, and local `dev.db` are maintained independently. They do not automatically share local mock accounts, posts, or comments. After deployment, account validation should use accounts that actually exist in the target environment database rather than assuming local seed data is present.
 

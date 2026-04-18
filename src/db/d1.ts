@@ -12,13 +12,16 @@ import type {
   PostTagRow,
   PostDetailRow,
   PostListRow,
+  PostTranslationRow,
   SessionUserRow,
+  UpsertPostTranslationInput,
   UpdatePostInput,
   UserRow
 } from "./types";
 import {
   addCommentsUserIdColumnSql,
   addPostsPrivateColumnSql,
+  addPostsSourceLangColumnSql,
   addUsersBlockedColumnSql,
   backfillCommentUserIdsSql,
   createCommentsTableSql,
@@ -26,6 +29,10 @@ import {
   createPostsAuthorIndexSql,
   createPostsTableWithRequiredTagSql,
   createPostsTimestampIndexSql,
+  createPostTranslationsLangStatusIndexSql,
+  createPostTranslationsPostLangIndexSql,
+  createPostTranslationsPostStatusIndexSql,
+  createPostTranslationsTableSql,
   createSessionsTableSql,
   createSessionTokenIndexSql,
   createSessionUserIndexSql,
@@ -50,6 +57,7 @@ const listPostsSql = `
     p.tag,
     p.author_id,
     p.is_private,
+    p.source_lang,
     u.username AS author_name,
     CASE WHEN p.tag LIKE '%draft%' THEN 1 ELSE 0 END AS is_draft
   FROM posts p
@@ -80,6 +88,7 @@ const postDetailSql = `
     p.tag,
     p.author_id,
     p.is_private,
+    p.source_lang,
     u.username AS author_name,
     CASE WHEN p.tag LIKE '%draft%' THEN 1 ELSE 0 END AS is_draft
   FROM posts p
@@ -98,6 +107,7 @@ const postByTitleSql = `
     p.tag,
     p.author_id,
     p.is_private,
+    p.source_lang,
     u.username AS author_name,
     CASE WHEN p.tag LIKE '%draft%' THEN 1 ELSE 0 END AS is_draft
   FROM posts p
@@ -269,6 +279,7 @@ const listPostsByAuthorSql = `
     p.tag,
     p.author_id,
     p.is_private,
+    p.source_lang,
     u.username AS author_name,
     CASE WHEN p.tag LIKE '%draft%' THEN 1 ELSE 0 END AS is_draft
   FROM posts p
@@ -280,14 +291,81 @@ const listPostsByAuthorSql = `
 `;
 
 const createPostSql = `
-  INSERT INTO posts (title, body, timestamp, author_id, tag, is_private)
-  VALUES (?, ?, ?, ?, ?, ?)
+  INSERT INTO posts (title, body, timestamp, author_id, tag, is_private, source_lang)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
 `;
 
 const updatePostSql = `
   UPDATE posts
-  SET title = ?, body = ?, tag = ?, is_private = ?
+  SET title = ?, body = ?, tag = ?, is_private = ?, source_lang = ?
   WHERE id = ?
+`;
+
+const getPostTranslationSql = `
+  SELECT
+    id,
+    post_id,
+    lang,
+    translated_title,
+    translated_body,
+    status,
+    source_hash,
+    provider,
+    error_message,
+    is_machine_translation,
+    translated_at
+  FROM post_translations
+  WHERE post_id = ?
+    AND lang = ?
+  LIMIT 1
+`;
+
+const listPostTranslationsSql = `
+  SELECT
+    id,
+    post_id,
+    lang,
+    translated_title,
+    translated_body,
+    status,
+    source_hash,
+    provider,
+    error_message,
+    is_machine_translation,
+    translated_at
+  FROM post_translations
+  WHERE post_id = ?
+  ORDER BY lang ASC
+`;
+
+const upsertPostTranslationSql = `
+  INSERT INTO post_translations (
+    post_id,
+    lang,
+    translated_title,
+    translated_body,
+    status,
+    source_hash,
+    provider,
+    error_message,
+    is_machine_translation,
+    translated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(post_id, lang) DO UPDATE SET
+    translated_title = excluded.translated_title,
+    translated_body = excluded.translated_body,
+    status = excluded.status,
+    source_hash = excluded.source_hash,
+    provider = excluded.provider,
+    error_message = excluded.error_message,
+    is_machine_translation = excluded.is_machine_translation,
+    translated_at = excluded.translated_at
+`;
+
+const deletePostTranslationsSql = `
+  DELETE FROM post_translations
+  WHERE post_id = ?
 `;
 
 const deletePostCommentsSql = `
@@ -344,6 +422,7 @@ type MigratablePostRow = {
   author_id: number | null;
   tag: string | null;
   is_private?: number | null;
+  source_lang?: string | null;
 };
 
 type MigratableCommentRow = {
@@ -423,14 +502,19 @@ const ensureD1Schema = async (db: D1Database) => {
       } else {
         const tagColumn = postColumns.find((column) => column.name === "tag");
         const hasPrivateColumn = postColumns.some((column) => column.name === "is_private");
+        const hasSourceLangColumn = postColumns.some((column) => column.name === "source_lang");
 
         if (!tagColumn || tagColumn.notnull !== 1) {
           const existingPosts = getD1Results<MigratablePostRow>(
             await db
               .prepare(
                 hasPrivateColumn
-                  ? "SELECT id, title, body, timestamp, author_id, tag, is_private FROM posts ORDER BY id"
-                  : "SELECT id, title, body, timestamp, author_id, tag FROM posts ORDER BY id"
+                  ? hasSourceLangColumn
+                    ? "SELECT id, title, body, timestamp, author_id, tag, is_private, source_lang FROM posts ORDER BY id"
+                    : "SELECT id, title, body, timestamp, author_id, tag, is_private, 'zh' AS source_lang FROM posts ORDER BY id"
+                  : hasSourceLangColumn
+                    ? "SELECT id, title, body, timestamp, author_id, tag, source_lang FROM posts ORDER BY id"
+                    : "SELECT id, title, body, timestamp, author_id, tag, 'zh' AS source_lang FROM posts ORDER BY id"
               )
               .all<MigratablePostRow>()
           );
@@ -440,13 +524,17 @@ const ensureD1Schema = async (db: D1Database) => {
 
           for (const post of existingPosts) {
             await db
-              .prepare("INSERT INTO posts (id, title, body, timestamp, author_id, tag, is_private) VALUES (?, ?, ?, ?, ?, ?, ?)")
-              .bind(post.id, post.title, post.body, post.timestamp, post.author_id, coerceStoredTagValue(post.tag), post.is_private ?? 0)
+              .prepare("INSERT INTO posts (id, title, body, timestamp, author_id, tag, is_private, source_lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+              .bind(post.id, post.title, post.body, post.timestamp, post.author_id, coerceStoredTagValue(post.tag), post.is_private ?? 0, post.source_lang ?? "zh")
               .run();
           }
           rebuiltPosts = true;
         } else if (!hasPrivateColumn) {
           await runD1Statement(db, addPostsPrivateColumnSql);
+        }
+
+        if (!rebuiltPosts && !hasSourceLangColumn) {
+          await runD1Statement(db, addPostsSourceLangColumnSql);
         }
       }
 
@@ -468,6 +556,10 @@ const ensureD1Schema = async (db: D1Database) => {
       await runD1Statement(db, createCommentsUserIndexSql);
       await runD1Statement(db, createPostsTimestampIndexSql);
       await runD1Statement(db, createPostsAuthorIndexSql);
+      await runD1Statement(db, createPostTranslationsTableSql);
+      await runD1Statement(db, createPostTranslationsPostLangIndexSql);
+      await runD1Statement(db, createPostTranslationsPostStatusIndexSql);
+      await runD1Statement(db, createPostTranslationsLangStatusIndexSql);
       await runD1Statement(db, backfillCommentUserIdsSql);
     })().catch((error) => {
       d1SchemaPromises.delete(db);
@@ -596,14 +688,40 @@ export const createD1Db = (db: D1Database): BlogDb => {
     async createPost(input: CreatePostInput): Promise<number> {
       const result = await db
         .prepare(createPostSql)
-        .bind(input.title, input.body, input.timestamp, input.authorId, input.tag, input.isPrivate ? 1 : 0)
+        .bind(input.title, input.body, input.timestamp, input.authorId, input.tag, input.isPrivate ? 1 : 0, input.sourceLang)
         .run();
       return Number(result.meta.last_row_id ?? 0);
     },
     async updatePost(input: UpdatePostInput): Promise<void> {
-      await db.prepare(updatePostSql).bind(input.title, input.body, input.tag, input.isPrivate ? 1 : 0, input.id).run();
+      await db.prepare(updatePostSql).bind(input.title, input.body, input.tag, input.isPrivate ? 1 : 0, input.sourceLang, input.id).run();
+    },
+    async getPostTranslation(postId: number, lang: string): Promise<PostTranslationRow | null> {
+      const result = await db.prepare(getPostTranslationSql).bind(postId, lang).first<PostTranslationRow>();
+      return result ?? null;
+    },
+    async listPostTranslations(postId: number): Promise<PostTranslationRow[]> {
+      const result = await db.prepare(listPostTranslationsSql).bind(postId).all<PostTranslationRow>();
+      return getD1Results<PostTranslationRow>(result);
+    },
+    async upsertPostTranslation(input: UpsertPostTranslationInput): Promise<void> {
+      await db
+        .prepare(upsertPostTranslationSql)
+        .bind(
+          input.postId,
+          input.lang,
+          input.translatedTitle,
+          input.translatedBody,
+          input.status,
+          input.sourceHash,
+          input.provider,
+          input.errorMessage ?? null,
+          input.isMachineTranslation ? 1 : 0,
+          input.translatedAt
+        )
+        .run();
     },
     async deletePost(id: number): Promise<void> {
+      await db.prepare(deletePostTranslationsSql).bind(id).run();
       await db.prepare(deletePostCommentsSql).bind(id).run();
       await db.prepare(deletePostSql).bind(id).run();
     },

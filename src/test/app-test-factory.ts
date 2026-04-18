@@ -8,10 +8,13 @@ import type {
   CreateSessionInput,
   PostDetailRow,
   PostListRow,
+  PostTranslationRow,
   SessionUserRow,
+  UpsertPostTranslationInput,
   UpdatePostInput
   ,UserRow
 } from "../db/types";
+import type { TranslationJobMessage } from "../translation/types";
 
 export type AppTestState = {
   sessionUser: SessionUserRow | null;
@@ -21,6 +24,8 @@ export type AppTestState = {
   createdComment: CreateCommentInput | null;
   createdPost: CreatePostInput | null;
   updatedPost: UpdatePostInput | null;
+  upsertedTranslations: UpsertPostTranslationInput[];
+  enqueuedTranslationJobs: TranslationJobMessage[];
   deletedCommentIds: number[];
   deletedPostIds: number[];
   userBlockedUpdates: Array<{ userId: number; blocked: boolean }>;
@@ -48,6 +53,7 @@ export const createPostDetailFixture = (overrides: Partial<PostDetailRow> = {}):
   tag: "news,draft,updates",
   author_id: 5,
   author_name: "alice",
+  source_lang: "zh",
   is_draft: 1,
   is_private: 0,
   ...overrides
@@ -60,8 +66,24 @@ export const createPostListFixture = (overrides: Partial<PostListRow> = {}): Pos
   tag: "news,draft",
   author_id: 5,
   author_name: "alice",
+  source_lang: "zh",
   is_draft: 1,
   is_private: 0,
+  ...overrides
+});
+
+export const createPostTranslationFixture = (overrides: Partial<PostTranslationRow> = {}): PostTranslationRow => ({
+  id: 1,
+  post_id: 7,
+  lang: "en",
+  translated_title: "Translated title",
+  translated_body: "Translated body",
+  status: "completed",
+  source_hash: "hash",
+  provider: "test",
+  error_message: null,
+  is_machine_translation: 1,
+  translated_at: "2024-01-01T01:00:00.000Z",
   ...overrides
 });
 
@@ -94,6 +116,8 @@ export const createAppTestContext = () => {
     createdComment: null,
     createdPost: null,
     updatedPost: null,
+    upsertedTranslations: [],
+    enqueuedTranslationJobs: [],
     deletedCommentIds: [],
     deletedPostIds: [],
     userBlockedUpdates: [],
@@ -150,6 +174,11 @@ export const createAppTestContext = () => {
     updatePost: async (input) => {
       state.updatedPost = input;
     },
+    getPostTranslation: async () => null,
+    listPostTranslations: async () => [],
+    upsertPostTranslation: async (input) => {
+      state.upsertedTranslations.push(input);
+    },
     deletePost: async (id) => {
       state.deletedPostIds.push(id);
     },
@@ -169,7 +198,10 @@ export const createAppTestContext = () => {
     getSite: () => mockSite,
     getDb: () => mockDb,
     getIsAdmin: () => state.overrideIsAdmin,
-    getAdminEmails: () => state.adminEmails
+    getAdminEmails: () => state.adminEmails,
+    enqueueTranslationJobs: async (_c, jobs) => {
+      state.enqueuedTranslationJobs.push(...jobs);
+    }
   };
 
   const createRequestHeaders = (extraHeaders?: HeadersInit, signedIn = false) => {
@@ -230,6 +262,7 @@ export const createAppTestContext = () => {
     createSessionUser: createSessionUserFixture,
     createPostDetail: createPostDetailFixture,
     createPostList: createPostListFixture,
+    createPostTranslation: createPostTranslationFixture,
     createUser: createUserFixture,
     createComment: createCommentFixture,
     setSignedInUser,

@@ -15,7 +15,8 @@ const sqliteDb = createSqliteDb({ dbPath, readonly: false });
 const app = createApp({
   getSite: () => getSiteConfig(),
   getDb: () => sqliteDb,
-  getAdminEmails: () => Array.from(parseAdminEmails(process.env.ADMIN_EMAILS))
+  getAdminEmails: () => Array.from(parseAdminEmails(process.env.ADMIN_EMAILS)),
+  enqueueTranslationJobs: async () => {}
 });
 
 const requestedPort = parsePort(process.env.PORT);

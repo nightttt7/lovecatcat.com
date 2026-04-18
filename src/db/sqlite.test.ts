@@ -365,6 +365,7 @@ describe("createSqliteDb", () => {
       body: "Original body",
       timestamp: "2024-01-06T00:00:00.000Z",
       authorId: user.id,
+      sourceLang: "zh",
       tag: "news",
       isPrivate: true
     });
@@ -373,6 +374,7 @@ describe("createSqliteDb", () => {
       id: postId,
       title: "Updated title",
       body: "Updated body",
+      sourceLang: "en",
       tag: "news,updated",
       isPrivate: false
     });
