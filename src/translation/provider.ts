@@ -71,3 +71,54 @@ export const createWorkersAiTranslationProvider = (ai: Ai): TranslationProvider 
     }
   };
 };
+
+export const LOCAL_DEV_TRANSLATION_PROVIDER_ID = "local-dev:mock-translation";
+
+const getLocalDevTranslationNotice = (targetLang: Lang) => {
+  return targetLang === "zh"
+    ? "(由于当前运行于 DEV 环境，真实翻译未执行，以下为占位译文。)"
+    : "(Running in a DEV environment, real translation was not executed. The following is placeholder translation.)";
+};
+
+const wrapLocalDevTranslation = (targetLang: Lang, value: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  return `${getLocalDevTranslationNotice(targetLang)}\n\n${value}`;
+};
+
+export type LocalDevTranslationProviderOptions = {
+  failureRate?: number;
+  random?: () => number;
+  now?: () => Date;
+};
+
+export class LocalDevTranslationFailureError extends Error {
+  constructor(message = "Simulated local dev translation failure") {
+    super(message);
+    this.name = "LocalDevTranslationFailureError";
+  }
+}
+
+export const createLocalDevTranslationProvider = (
+  options: LocalDevTranslationProviderOptions = {}
+): TranslationProvider => {
+  const { failureRate = 0, random = Math.random, now = () => new Date() } = options;
+  const normalizedFailureRate = Number.isFinite(failureRate) ? Math.min(1, Math.max(0, failureRate)) : 0;
+
+  return {
+    async translatePost(input) {
+      if (normalizedFailureRate > 0 && random() < normalizedFailureRate) {
+        throw new LocalDevTranslationFailureError();
+      }
+
+      return {
+        translatedTitle: wrapLocalDevTranslation(input.targetLang, input.title),
+        translatedBody: wrapLocalDevTranslation(input.targetLang, input.body) ?? "",
+        provider: LOCAL_DEV_TRANSLATION_PROVIDER_ID,
+        translatedAt: now().toISOString()
+      };
+    }
+  };
+};

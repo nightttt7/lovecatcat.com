@@ -125,15 +125,6 @@ The async translation flow is:
 
 The main routes currently include the home page `/`, post details `/posts/:id`, comment submission `/posts/:id/comments`, authentication `/login` `/signup` `/logout`, the account page `/account`, admin post creation and editing `/post` `/post/:id/edit`, the admin dashboard `/admin`, user management `/admin/users/:id/block` `/unblock` `/delete`, and language switching via `/api/lang`.
 
-## Translation Pipeline
-
-- `posts` remains the canonical source-content table.
-- `post_translations` stores per-language machine-translated variants and their statuses.
-- The post editor auto-detects source language from the title and body and lets the author override it before save.
-- Post create and post edit currently mark target-language rows as `pending` or `stale` and enqueue async translation jobs.
-- Post detail pages prefer the reader's current UI language when a completed translation exists and show a visible original/translated toggle.
-- `npm run dev` uses a no-op translation queue hook for local Node.js work; the async translation pipeline is exercised in the Worker runtime through `wrangler dev --remote`, preview, and production.
-
 ## Getting Started
 
 ### Install
@@ -261,6 +252,15 @@ The translation pipeline also depends on two Cloudflare bindings configured in [
 - `TRANSLATION_QUEUE`: Cloudflare Queue used for async translation jobs.
 
 Preview D1, production D1, and local `dev.db` are maintained independently. They do not automatically share local mock accounts, posts, or comments. After deployment, account validation should use accounts that actually exist in the target environment database rather than assuming local seed data is present.
+
+## Translation Pipeline
+
+- `posts` stores the source content, and `post_translations` stores per-language translated variants.
+- Saving a post auto-detects the source language, marks target translations as `pending` or `stale`, and enqueues async translation work.
+- Post pages prefer the current UI language when a completed translation exists, with a visible original/translated toggle.
+- `npm run dev` simulates the async pipeline locally with a marked DEV placeholder instead of real AI output.
+- `LOCAL_TRANSLATION_MIN_DELAY_MS`, `LOCAL_TRANSLATION_MAX_DELAY_MS`, and `LOCAL_TRANSLATION_FAILURE_RATE` can be used to tune local delay and failure behavior.
+- `wrangler dev --remote`, preview, and production use the real Cloudflare Queue plus Workers AI pipeline.
 
 ## Coding Standards
 
