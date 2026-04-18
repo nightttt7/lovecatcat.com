@@ -1598,7 +1598,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       ? html`
           <div class="flash flash-warn mb-3">
             <div class="d-flex flex-justify-between flex-items-center flex-wrap">
-              <span>${t("translatedPostNotice", lang)}</span>
+              <span>${t(shouldUseTranslation ? "translatedPostNotice" : "originalPostNotice", lang)}</span>
               <span class="mt-2 mt-sm-0">
                 ${shouldUseTranslation
                   ? html`<a href="${buildPostViewHref(post.id, "original")}" class="btn btn-sm">${t("readOriginalPost", lang)}</a>`

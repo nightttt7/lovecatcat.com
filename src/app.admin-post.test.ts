@@ -218,6 +218,8 @@ describe("createApp admin and post editor routes", () => {
     const html = await res.text();
     expect(html).toContain("原文标题");
     expect(html).toContain("原文内容");
+    expect(html).toContain("original version");
+    expect(html).not.toContain("machine-translated version");
     expect(html).toContain('href="/posts/7?view=translation"');
   });
 
