@@ -16,10 +16,6 @@ applyTo: '**'
 - After preview deployment, the agent should explicitly remind the human to complete three steps: preview UAT, then `npm run deploy:preview:inactive` after UAT passes, then merge `dev` into `master`.
 - Production deployment can proceed only after all three steps are complete.
 
-### Remote Development
-- `npm run wrangler:dev:remote` always connects to the preview environment, which maps to Worker `lovecatcat-preview` and D1 `lovecatcat-preview`.
-- It is only for preview remote development and debugging, not for production remote debugging.
-
 ### Environment Mapping
 - Production uses the top-level configuration and maps to Worker `lovecatcat`, D1 `lovecatcat-prod`, and custom domain `https://lovecatcat.com`.
 - Preview uses `[env.preview]` and maps to Worker `lovecatcat-preview`, D1 `lovecatcat-preview`, and stable URL `https://lovecatcat-preview.nightttt7.workers.dev`.
@@ -39,7 +35,6 @@ applyTo: '**'
 - `ADMIN_EMAILS` is an environment-scoped secret and must be configured separately for preview and production.
 - Configure the preview secret with `npx wrangler secret put ADMIN_EMAILS --env preview`.
 - Configure the production secret with `npx wrangler secret put ADMIN_EMAILS`.
-- `npm run wrangler:dev:remote` also depends on the preview environment's `ADMIN_EMAILS` secret.
 
 ### Preview URL Rules
 - Use the preview environment URL `https://lovecatcat-preview.nightttt7.workers.dev` as the stable test entry point.

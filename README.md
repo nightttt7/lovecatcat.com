@@ -16,7 +16,6 @@ npm run build:assets
 npm run dev
 
 # Cloudflare
-npm run wrangler:dev:remote
 npm run deploy:preview
 npm run deploy:preview:inactive
 npm run deploy:production
@@ -144,20 +143,6 @@ Default URL: `http://localhost:3000`
 This mode uses only local Node.js and SQLite `dev.db`.
 `npm run dev` now runs `npm run build:assets` first so the browser-side Markdown preview bundle stays in sync with the shared Markdown source modules.
 
-### Remote Preview
-
-```bash
-npm run wrangler:dev:remote
-```
-
-Default URL: `http://127.0.0.1:8787`.
-
-It always connects to the preview environment, which means Worker `lovecatcat-preview` and remote D1 `lovecatcat-preview`.
-
-Cloudflare authentication must already be set up, and the preview-specific `ADMIN_EMAILS` secret must be configured separately.
-
-This mode also exercises the async translation pipeline because the Worker runtime uses the `AI` and `TRANSLATION_QUEUE` bindings from [wrangler.toml](wrangler.toml).
-
 ### Deploy
 
 ```bash
@@ -205,7 +190,7 @@ Do not commit secrets into project files. Use system environment variables inste
 [System.Environment]::SetEnvironmentVariable('CLOUDFLARE_ACCOUNT_ID', 'your_cloudflare_account_id', 'User')
 ```
 
-### Environment Variables: Local Development and Remote Preview
+### Environment Variables: Local Development
 
 Local development loads `.env` and `.env.development` in that order:
 
@@ -214,8 +199,6 @@ Local development loads `.env` and `.env.development` in that order:
 - `PORT`: optional, the local port. If occupied, the app automatically switches to another available port.
 
 `.env.development` is not gitignored and can be committed as an example/default environment file.
-
-`.env` is gitignored and can be used to store admin email addresses for the `lovecatcat-preview` database when testing Remote Preview.
 
 ### Environment Variables: Deploy
 
@@ -260,7 +243,7 @@ Preview D1, production D1, and local `dev.db` are maintained independently. They
 - Post pages prefer the current UI language when a completed translation exists, with a visible original/translated toggle.
 - `npm run dev` simulates the async pipeline locally with a marked DEV placeholder instead of real AI output.
 - `LOCAL_TRANSLATION_MIN_DELAY_MS`, `LOCAL_TRANSLATION_MAX_DELAY_MS`, and `LOCAL_TRANSLATION_FAILURE_RATE` can be used to tune local delay and failure behavior.
-- `wrangler dev --remote`, preview, and production use the real Cloudflare Queue plus Workers AI pipeline.
+- Preview and production use the real Cloudflare Queue plus Workers AI pipeline.
 
 ## Coding Standards
 
@@ -309,14 +292,6 @@ When running browser-level tests, start the target service first:
 ```bash
 npm run dev
 ```
-
-If you need Remote Preview validation instead, run:
-
-```bash
-npm run wrangler:dev:remote
-```
-
-The default URLs are `http://localhost:3000/` and `http://127.0.0.1:8787/`.
 
 Prefer Playwright MCP for real clicks, typing, submissions, and navigation. Cover at least three core flows and document the key locators, expected results, and actual results.
 

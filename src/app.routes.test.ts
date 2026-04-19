@@ -55,7 +55,7 @@ describe("createApp route flows", () => {
   it("prefills login next from the previous local page", async () => {
     const res = await request("/login", {
       headers: {
-        referer: "http://127.0.0.1:8787/posts/1?from=feed"
+        referer: "/posts/1?from=feed"
       }
     });
 
@@ -183,7 +183,7 @@ describe("createApp route flows", () => {
       false,
       {
         headers: {
-          referer: "http://127.0.0.1:8787/posts/1"
+          referer: "/posts/1"
         }
       }
     );

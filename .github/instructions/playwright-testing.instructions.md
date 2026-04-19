@@ -19,8 +19,7 @@ applyTo: '**'
 - Start the local service first with `npm run dev`.
 - The default local test URL is `http://localhost:3000/`.
 - If port `3000` is occupied, detect the fallback local dev URL from terminal output and use that URL instead of assuming the default port.
-- For Cloudflare Remote Preview validation, start `npm run wrangler:dev:remote` first.
-- The default Remote Preview URL is `http://127.0.0.1:8787/`. It connects to the preview environment and can also serve as the Playwright test entry point.
+- For deployed preview validation, use the stable preview URL after `npm run deploy:preview`.
 - Browser-level validation must include real clicks, typing, form submission, and navigation rather than only checking static HTML.
 
 ### Recommended Flow

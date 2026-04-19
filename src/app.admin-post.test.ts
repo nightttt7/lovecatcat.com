@@ -293,7 +293,7 @@ describe("createApp admin and post editor routes", () => {
       false,
       {
         headers: {
-          referer: "http://127.0.0.1:8787/post/7/edit"
+          referer: "/post/7/edit"
         }
       }
     );
@@ -510,7 +510,7 @@ describe("createApp admin and post editor routes", () => {
       false,
       {
         headers: {
-          referer: "http://127.0.0.1:8787/admin"
+          referer: "/admin"
         }
       }
     );
@@ -566,7 +566,7 @@ describe("createApp admin and post editor routes", () => {
       false,
       {
         headers: {
-          referer: "http://127.0.0.1:8787/admin/users/2"
+          referer: "/admin/users/2"
         }
       }
     );
@@ -609,7 +609,7 @@ describe("createApp admin and post editor routes", () => {
       false,
       {
         headers: {
-          referer: "http://127.0.0.1:8787/admin/users/2"
+          referer: "/admin/users/2"
         }
       }
     );
@@ -666,7 +666,7 @@ describe("createApp admin and post editor routes", () => {
       false,
       {
         headers: {
-          referer: "http://127.0.0.1:8787/admin/users/2"
+          referer: "/admin/users/2"
         }
       }
     );

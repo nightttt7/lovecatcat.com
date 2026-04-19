@@ -8,7 +8,6 @@
   "scripts": {
     "build:assets": "node scripts/build-post-editor-preview.mjs",
     "dev": "npm run build:assets && tsx watch src/server.ts",
-    "wrangler:dev:remote": "wrangler dev --remote --env preview",
     "deploy:preview": "wrangler deploy --env preview",
     "deploy:preview:inactive": "wrangler deploy --env preview --config wrangler.preview-inactive.toml",
     "deploy:production": "wrangler deploy --env=\"\"",

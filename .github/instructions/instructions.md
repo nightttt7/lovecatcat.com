@@ -33,9 +33,7 @@ If image upload or R2 are implemented later, they should be added incrementally 
 - This is a solo-development repository. Use `dev` as the only long-lived development branch unless the user explicitly asks for another branch.
 - Do not ask for or create extra feature branches by default. `master` is the release branch, not the working branch.
 - Local `npm run dev` depends only on Node.js and the project-root `dev.db` by default and does not need to connect to Cloudflare.
-- `npm run wrangler:dev:remote` can be used as the Playwright browser-test entry point and connects to the preview environment with its own preview D1.
-- `npm run wrangler:dev:remote`, `npm run deploy:preview`, `npm run deploy:preview:inactive`, and `npm run deploy:production` connect to Cloudflare, so Wrangler must already have working Cloudflare access before they are run.
-- `npm run wrangler:dev:remote` always targets the preview environment, using Worker `lovecatcat-preview` and D1 `lovecatcat-preview`. Do not treat it as a production remote-debug entry point.
+- `npm run deploy:preview`, `npm run deploy:preview:inactive`, and `npm run deploy:production` connect to Cloudflare, so Wrangler must already have working Cloudflare access before they are run.
 - The default release order is: develop on `dev` -> `npm run deploy:preview` from `dev` -> pause for human preview UAT -> `npm run deploy:preview:inactive` -> merge `dev` into `master` -> `npm run deploy:production` from `master`. Do not skip preview, do not deploy production directly from `dev`, and do not deploy straight to production.
 - For local machines or CI accessing Cloudflare, the current convention is to use `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for authentication and account selection.
 - On local Windows development machines, prefer system environment variables for Cloudflare credentials rather than storing secrets in repository `.env` files.
