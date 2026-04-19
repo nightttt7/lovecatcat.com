@@ -32,6 +32,7 @@ applyTo: '**'
 
 ### Pre-Deploy Checks
 - Run `npx wrangler whoami` first to confirm the token is connected to the correct account.
+- Ensure the preview translation queue `lovecatcat-preview-post-translation` already exists before `npm run deploy:preview`. If it is missing, create it once with `npx wrangler queues create lovecatcat-preview-post-translation`.
 - `ADMIN_EMAILS` is an environment-scoped secret and must be configured separately for preview and production.
 - Configure the preview secret with `npx wrangler secret put ADMIN_EMAILS --env preview`.
 - Configure the production secret with `npx wrangler secret put ADMIN_EMAILS`.

@@ -152,6 +152,9 @@ git switch dev
 # Confirm the Cloudflare account and token are pointing to the correct account first
 npx wrangler whoami
 
+# Ensure the preview translation queue exists before the first preview deploy
+npx wrangler queues create lovecatcat-preview-post-translation
+
 # Configure ADMIN_EMAILS for preview and production if needed
 npx wrangler secret put ADMIN_EMAILS --env preview
 npx wrangler secret put ADMIN_EMAILS
@@ -176,6 +179,8 @@ npm run deploy:production
 The current production Worker is `lovecatcat`, backed by database `lovecatcat-prod`, and served at `https://lovecatcat.com`.
 
 The preview Worker is `lovecatcat-preview`, backed by database `lovecatcat-preview`, with the stable preview URL `https://lovecatcat-preview.nightttt7.workers.dev`.
+
+The preview translation queue is `lovecatcat-preview-post-translation`. If this queue has not been created yet in the Cloudflare account, `npm run deploy:preview` will fail until you run `npx wrangler queues create lovecatcat-preview-post-translation` once.
 
 Preview is intended only for short-lived UAT from `dev`. After validation, run `npm run deploy:preview:inactive` to disable the `workers.dev` entry so it does not remain publicly accessible, then merge the approved `dev` state into `master` before running production deployment. Re-run `npm run deploy:preview` when the next UAT cycle starts.
 

@@ -200,10 +200,25 @@ describe("createApp admin and post editor routes", () => {
     expect(res.status).toBe(200);
 
     const html = await res.text();
-    expect(html).toContain("Translated title");
+    expect(html).toContain("Translated title (original title [原文标题])");
     expect(html).toContain("Translated body");
     expect(html).toContain("machine-translated version");
     expect(html).toContain('href="/posts/7?view=original"');
+  });
+
+  it("uses ascii parentheses for translated titles in the Chinese UI", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "Original title", body: "Original body", source_lang: "en", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "zh", translated_title: "翻译后的标题", translated_body: "翻译后的内容", status: "completed" });
+
+    const res = await request("/posts/7", { headers: { cookie: "lang=zh" } });
+
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    expect(html).toContain("翻译后的标题 (原标题 [Original title])");
+    expect(html).not.toContain("翻译后的标题（原标题 [Original title]）");
+    expect(html).toContain("翻译后的内容");
   });
 
   it("renders the original post body when the reader explicitly requests it", async () => {
@@ -220,6 +235,7 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain("原文内容");
     expect(html).toContain("original version");
     expect(html).not.toContain("machine-translated version");
+    expect(html).not.toContain("Translated title (original title [原文标题])");
     expect(html).toContain('href="/posts/7?view=translation"');
   });
 

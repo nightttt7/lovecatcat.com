@@ -80,7 +80,19 @@ const getLocalDevTranslationNotice = (targetLang: Lang) => {
     : "(Running in a DEV environment, real translation was not executed. The following is placeholder translation.)";
 };
 
-const wrapLocalDevTranslation = (targetLang: Lang, value: string | null) => {
+const getLocalDevMockTitlePrefix = (targetLang: Lang) => {
+  return targetLang === "zh" ? "[DEV 模拟译文]" : "[DEV mock translation]";
+};
+
+const wrapLocalDevTranslatedTitle = (targetLang: Lang, value: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  return `${getLocalDevMockTitlePrefix(targetLang)} ${value}`;
+};
+
+const wrapLocalDevTranslationBody = (targetLang: Lang, value: string | null) => {
   if (!value) {
     return null;
   }
@@ -114,8 +126,8 @@ export const createLocalDevTranslationProvider = (
       }
 
       return {
-        translatedTitle: wrapLocalDevTranslation(input.targetLang, input.title),
-        translatedBody: wrapLocalDevTranslation(input.targetLang, input.body) ?? "",
+        translatedTitle: wrapLocalDevTranslatedTitle(input.targetLang, input.title),
+        translatedBody: wrapLocalDevTranslationBody(input.targetLang, input.body) ?? "",
         provider: LOCAL_DEV_TRANSLATION_PROVIDER_ID,
         translatedAt: now().toISOString()
       };

@@ -19,9 +19,7 @@ describe("createLocalDevTranslationProvider", () => {
     });
 
     expect(result.provider).toBe(LOCAL_DEV_TRANSLATION_PROVIDER_ID);
-    expect(result.translatedTitle).toBe(
-      "(由于当前运行于 DEV 环境，真实翻译未执行，以下为占位译文。)\n\nHello world"
-    );
+    expect(result.translatedTitle).toBe("[DEV 模拟译文] Hello world");
     expect(result.translatedBody).toBe(
       "(由于当前运行于 DEV 环境，真实翻译未执行，以下为占位译文。)\n\nOriginal body"
     );
@@ -38,9 +36,7 @@ describe("createLocalDevTranslationProvider", () => {
       body: "原文内容"
     });
 
-    expect(result.translatedTitle).toBe(
-      "(Running in a DEV environment, real translation was not executed. The following is placeholder translation.)\n\n原文标题"
-    );
+    expect(result.translatedTitle).toBe("[DEV mock translation] 原文标题");
     expect(result.translatedBody).toContain("原文内容");
   });
 

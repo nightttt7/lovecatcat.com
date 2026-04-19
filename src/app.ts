@@ -122,6 +122,30 @@ const buildPostViewHref = (postId: number, view: "original" | "translation") => 
   return view === "original" ? `/posts/${postId}?view=original` : `/posts/${postId}?view=translation`;
 };
 
+const formatTranslatedPostTitle = ({
+  translatedTitle,
+  originalTitle,
+  lang
+}: {
+  translatedTitle: string | null;
+  originalTitle: string | null;
+  lang: Lang;
+}) => {
+  const normalizedTranslatedTitle = translatedTitle?.trim() ?? "";
+  const normalizedOriginalTitle = originalTitle?.trim() ?? "";
+
+  if (!normalizedTranslatedTitle) {
+    return normalizedOriginalTitle || null;
+  }
+
+  if (!normalizedOriginalTitle || normalizedTranslatedTitle === normalizedOriginalTitle) {
+    return normalizedTranslatedTitle;
+  }
+
+  const wrappedOriginalTitle = `${t("originalTitleLabel", lang)} [${normalizedOriginalTitle}]`;
+  return `${normalizedTranslatedTitle} (${wrappedOriginalTitle})`;
+};
+
 const syncPostTranslationState = async <TBindings extends Record<string, unknown>>({
   c,
   db,
@@ -1590,7 +1614,13 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const preferredTranslation = lang !== sourceLang ? await db.getPostTranslation(postId, lang) : null;
     const canRenderTranslation = preferredTranslation?.status === "completed" && Boolean(preferredTranslation.translated_body);
     const shouldUseTranslation = lang !== sourceLang && viewMode !== "original" && canRenderTranslation;
-    const renderedTitle = shouldUseTranslation ? preferredTranslation?.translated_title ?? post.title : post.title;
+    const renderedTitle = shouldUseTranslation
+      ? formatTranslatedPostTitle({
+          translatedTitle: preferredTranslation?.translated_title ?? null,
+          originalTitle: post.title,
+          lang
+        })
+      : post.title;
     const renderedBody = shouldUseTranslation ? preferredTranslation?.translated_body ?? post.body ?? "" : post.body ?? "";
     const comments = await db.listComments(postId);
     const accessUser = getAccessUser(c);
