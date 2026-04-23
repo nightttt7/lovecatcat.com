@@ -23,8 +23,10 @@ import {
   addCommentsUserIdColumnSql,
   addPostsPrivateColumnSql,
   addPostsSourceLangColumnSql,
+  addPostTranslationsIsPublishedColumnSql,
   addUsersBlockedColumnSql,
   backfillCommentUserIdsSql,
+  backfillPostTranslationsIsPublishedSql,
   createCommentsTableSql,
   createCommentsUserIndexSql,
   createPostsAuthorIndexSql,
@@ -309,6 +311,7 @@ const getPostTranslationSql = `
     provider,
     error_message,
     is_machine_translation,
+    is_published,
     translated_at
   FROM post_translations
   WHERE post_id = ?
@@ -328,6 +331,7 @@ const listPostTranslationsSql = `
     provider,
     error_message,
     is_machine_translation,
+    is_published,
     translated_at
   FROM post_translations
   WHERE post_id = ?
@@ -345,9 +349,10 @@ const upsertPostTranslationSql = `
     provider,
     error_message,
     is_machine_translation,
+    is_published,
     translated_at
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(post_id, lang) DO UPDATE SET
     translated_title = excluded.translated_title,
     translated_body = excluded.translated_body,
@@ -356,12 +361,18 @@ const upsertPostTranslationSql = `
     provider = excluded.provider,
     error_message = excluded.error_message,
     is_machine_translation = excluded.is_machine_translation,
+    is_published = excluded.is_published,
     translated_at = excluded.translated_at
 `;
 
 const deletePostTranslationsSql = `
   DELETE FROM post_translations
   WHERE post_id = ?
+`;
+
+const deletePostTranslationByLangSql = `
+  DELETE FROM post_translations
+  WHERE post_id = ? AND lang = ?
 `;
 
 const deletePostCommentsSql = `
@@ -545,6 +556,11 @@ export const createSqliteDb = (options: SqliteOptions): BlogDb => {
         db.exec(createPostTranslationsPostLangIndexSql);
         db.exec(createPostTranslationsPostStatusIndexSql);
         db.exec(createPostTranslationsLangStatusIndexSql);
+        const postTranslationColumns = db.prepare("PRAGMA table_info(post_translations)").all() as TableColumnRow[];
+        if (!postTranslationColumns.some((column) => column.name === "is_published")) {
+          db.exec(addPostTranslationsIsPublishedColumnSql);
+          db.exec(backfillPostTranslationsIsPublishedSql);
+        }
         db.exec(backfillCommentUserIdsSql);
       })().catch((error) => {
         schemaPromise = null;
@@ -696,8 +712,13 @@ export const createSqliteDb = (options: SqliteOptions): BlogDb => {
         input.provider,
         input.errorMessage ?? null,
         input.isMachineTranslation ? 1 : 0,
+        input.isPublished ? 1 : 0,
         input.translatedAt
       );
+    },
+    async deletePostTranslation(postId: number, lang: string): Promise<void> {
+      const stmt = db.prepare(deletePostTranslationByLangSql);
+      stmt.run(postId, lang);
     },
     async deletePost(id: number): Promise<void> {
       db.prepare(deletePostTranslationsSql).run(id);

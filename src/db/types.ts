@@ -1,4 +1,4 @@
-export type PostTranslationStatus = "pending" | "processing" | "completed" | "failed" | "stale";
+export type PostTranslationStatus = "draft" | "pending" | "processing" | "completed" | "failed" | "stale";
 
 export type PostListRow = {
   id: number;
@@ -36,6 +36,7 @@ export type PostTranslationRow = {
   provider: string | null;
   error_message: string | null;
   is_machine_translation: number | null;
+  is_published: number | null;
   translated_at: string | null;
 };
 
@@ -136,6 +137,7 @@ export type UpsertPostTranslationInput = {
   provider: string | null;
   errorMessage?: string | null;
   isMachineTranslation: boolean;
+  isPublished: boolean;
   translatedAt: string | null;
 };
 
@@ -174,6 +176,7 @@ export type BlogDb = {
   getPostTranslation: (postId: number, lang: string) => Promise<PostTranslationRow | null>;
   listPostTranslations: (postId: number) => Promise<PostTranslationRow[]>;
   upsertPostTranslation: (input: UpsertPostTranslationInput) => Promise<void>;
+  deletePostTranslation: (postId: number, lang: string) => Promise<void>;
   deletePost: (id: number) => Promise<void>;
   createSession: (input: CreateSessionInput) => Promise<void>;
   getSessionUserByTokenHash: (tokenHash: string, now: string) => Promise<SessionUserRow | null>;

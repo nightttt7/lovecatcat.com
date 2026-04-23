@@ -45,6 +45,7 @@ export const processTranslationJob = async (
     provider: existingTranslation?.provider ?? DEFAULT_TRANSLATION_PROVIDER_ID,
     errorMessage: null,
     isMachineTranslation: true,
+    isPublished: existingTranslation?.is_published === 1,
     translatedAt: existingTranslation?.translated_at ?? null
   });
 
@@ -66,6 +67,7 @@ export const processTranslationJob = async (
       provider: translatedPost.provider,
       errorMessage: null,
       isMachineTranslation: true,
+      isPublished: existingTranslation?.is_published === 1,
       translatedAt: translatedPost.translatedAt
     });
 
@@ -81,6 +83,7 @@ export const processTranslationJob = async (
       provider: existingTranslation?.provider ?? DEFAULT_TRANSLATION_PROVIDER_ID,
       errorMessage: error instanceof Error ? error.message : "Unknown translation error",
       isMachineTranslation: true,
+      isPublished: existingTranslation?.is_published === 1,
       translatedAt: existingTranslation?.translated_at ?? null
     });
 

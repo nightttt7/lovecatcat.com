@@ -106,9 +106,24 @@ export const createPostTranslationsTableSql = `
     provider TEXT,
     error_message TEXT,
     is_machine_translation INTEGER NOT NULL DEFAULT 1,
+    is_published INTEGER NOT NULL DEFAULT 0,
     translated_at DATETIME,
     FOREIGN KEY (post_id) REFERENCES posts(id)
   )
+`;
+
+export const addPostTranslationsIsPublishedColumnSql = `
+  ALTER TABLE post_translations
+  ADD COLUMN is_published INTEGER NOT NULL DEFAULT 0
+`;
+
+export const backfillPostTranslationsIsPublishedSql = `
+  UPDATE post_translations
+  SET is_published = 1
+  WHERE status = 'completed'
+    AND is_published = 0
+    AND translated_body IS NOT NULL
+    AND TRIM(translated_body) != ''
 `;
 
 export const createPostsTimestampIndexSql = `

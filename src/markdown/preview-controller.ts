@@ -71,6 +71,29 @@ function setScrollProgress(element: ScrollSyncElement, progress: number): void {
   element.scrollTop = Math.min(maxScrollTop, Math.max(0, progress * maxScrollTop));
 }
 
+function normalizeWheelDelta(event: WheelEvent): number {
+  switch (event.deltaMode) {
+    case WheelEvent.DOM_DELTA_LINE:
+      return event.deltaY * 16;
+    case WheelEvent.DOM_DELTA_PAGE:
+      return event.deltaY * window.innerHeight;
+    default:
+      return event.deltaY;
+  }
+}
+
+function isScrollBoundaryHit(element: ScrollSyncElement, deltaY: number): boolean {
+  if (deltaY < 0) {
+    return element.scrollTop <= 0;
+  }
+
+  if (deltaY > 0) {
+    return element.scrollTop + element.clientHeight >= element.scrollHeight;
+  }
+
+  return false;
+}
+
 export const attachMarkdownPreviewController = (
   root: HTMLElement,
   options: MarkdownPreviewControllerOptions = {}
@@ -181,6 +204,23 @@ export const attachMarkdownPreviewController = (
     syncScroller(previewFrame, editorInput);
   }
 
+  function handleWheel(event: WheelEvent) {
+    const element = event.currentTarget;
+
+    if (!(element instanceof HTMLElement) && !(element instanceof HTMLTextAreaElement)) {
+      return;
+    }
+
+    const deltaY = normalizeWheelDelta(event);
+
+    if (!isScrollBoundaryHit(element, deltaY)) {
+      return;
+    }
+
+    event.preventDefault();
+    window.scrollBy({ top: deltaY, left: 0, behavior: "auto" });
+  }
+
   function handleMediaChange() {
     syncLayout();
   }
@@ -195,6 +235,8 @@ export const attachMarkdownPreviewController = (
   editorInput.addEventListener("input", scheduleRender);
   editorInput.addEventListener("scroll", handleInputScroll);
   previewFrame.addEventListener("scroll", handlePreviewScroll);
+  editorInput.addEventListener("wheel", handleWheel, { passive: false });
+  previewFrame.addEventListener("wheel", handleWheel, { passive: false });
 
   if (typeof desktopQuery.addEventListener === "function") {
     desktopQuery.addEventListener("change", handleMediaChange);
@@ -228,6 +270,8 @@ export const attachMarkdownPreviewController = (
       editorInput.removeEventListener("input", scheduleRender);
       editorInput.removeEventListener("scroll", handleInputScroll);
       previewFrame.removeEventListener("scroll", handlePreviewScroll);
+      editorInput.removeEventListener("wheel", handleWheel);
+      previewFrame.removeEventListener("wheel", handleWheel);
 
       if (typeof desktopQuery.removeEventListener === "function") {
         desktopQuery.removeEventListener("change", handleMediaChange);

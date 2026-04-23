@@ -26,6 +26,7 @@ export type AppTestState = {
   createdPost: CreatePostInput | null;
   updatedPost: UpdatePostInput | null;
   upsertedTranslations: UpsertPostTranslationInput[];
+  deletedTranslations: Array<{ postId: number; lang: string }>;
   enqueuedTranslationJobs: TranslationJobMessage[];
   deletedCommentIds: number[];
   deletedPostIds: number[];
@@ -84,6 +85,7 @@ export const createPostTranslationFixture = (overrides: Partial<PostTranslationR
   provider: "test",
   error_message: null,
   is_machine_translation: 1,
+  is_published: 1,
   translated_at: "2024-01-01T01:00:00.000Z",
   ...overrides
 });
@@ -119,6 +121,7 @@ export const createAppTestContext = () => {
     createdPost: null,
     updatedPost: null,
     upsertedTranslations: [],
+    deletedTranslations: [],
     enqueuedTranslationJobs: [],
     deletedCommentIds: [],
     deletedPostIds: [],
@@ -180,6 +183,9 @@ export const createAppTestContext = () => {
     listPostTranslations: async () => [],
     upsertPostTranslation: async (input) => {
       state.upsertedTranslations.push(input);
+    },
+    deletePostTranslation: async (postId, lang) => {
+      state.deletedTranslations.push({ postId, lang });
     },
     deletePost: async (id) => {
       state.deletedPostIds.push(id);

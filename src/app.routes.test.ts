@@ -280,7 +280,7 @@ describe("createApp route flows", () => {
     );
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/posts/77");
+    expect(res.headers.get("location")).toBe("/post/77/translation");
     expect(state.createdPost).toEqual({
       title: "Hello",
       body: "Body",
@@ -309,7 +309,7 @@ describe("createApp route flows", () => {
     );
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/posts/77");
+    expect(res.headers.get("location")).toBe("/post/77/translation");
     expect(state.createdPost).toEqual({
       title: "Secret",
       body: "Body",

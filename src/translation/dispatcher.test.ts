@@ -36,6 +36,7 @@ const buildMinimalDb = (post: PostDetailRow | null): { db: BlogDb; state: Minima
         provider: input.provider,
         error_message: input.errorMessage ?? null,
         is_machine_translation: input.isMachineTranslation ? 1 : 0,
+        is_published: input.isPublished ? 1 : 0,
         translated_at: input.translatedAt
       };
     }
