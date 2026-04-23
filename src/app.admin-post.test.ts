@@ -500,6 +500,47 @@ describe("createApp admin and post editor routes", () => {
     ]);
   });
 
+  it("forbids admins from generating a translation for posts they do not own", async () => {
+    setSignedInAdmin({ id: 5 });
+    mockDb.getPostById = async () => createPostDetail({ author_id: 8, author_name: "other", source_lang: "en" });
+
+    const res = await submitForm(
+      "/post/7/translation/generate",
+      { sourceLang: "en" },
+      true
+    );
+
+    expect(res.status).toBe(403);
+    const html = await res.text();
+    expect(html).toContain("你没有权限执行这个操作");
+    expect(state.upsertedTranslations).toHaveLength(0);
+    expect(state.enqueuedTranslationJobs).toHaveLength(0);
+  });
+
+  it("forbids admins from saving a translation for posts they do not own", async () => {
+    setSignedInAdmin({ id: 5 });
+    mockDb.getPostById = async () => createPostDetail({ author_id: 8, author_name: "other", source_lang: "en" });
+
+    const res = await submitForm(
+      "/post/7/translation",
+      { translatedTitle: "x", translatedBody: "y" },
+      true
+    );
+
+    expect(res.status).toBe(403);
+    expect(state.upsertedTranslations).toHaveLength(0);
+  });
+
+  it("redirects to login when a non-admin attempts to generate or save a translation", async () => {
+    const generateRes = await submitForm("/post/7/translation/generate", { sourceLang: "en" });
+    expect(generateRes.status).toBe(302);
+    expect(generateRes.headers.get("location")).toBe("/login?next=%2Fpost%2F7%2Fedit");
+
+    const saveRes = await submitForm("/post/7/translation", { translatedBody: "x" });
+    expect(saveRes.status).toBe(302);
+    expect(saveRes.headers.get("location")).toBe("/login?next=%2Fpost%2F7%2Fedit");
+  });
+
   it("lets admins save a manually edited translated version", async () => {
     setSignedInAdmin();
     mockDb.getPostById = async () => createPostDetail({

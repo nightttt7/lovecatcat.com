@@ -136,6 +136,19 @@ describe("processTranslationJob", () => {
   });
 });
 
+describe("processTranslationJob edge cases", () => {
+  it("skips the job when the source or target language is invalid", async () => {
+    const post = buildPost();
+    const { db, state } = buildMinimalDb(post);
+    const job = buildJob(post, { targetLang: "fr" as never });
+
+    const result = await processTranslationJob(job, { db, provider: successProvider });
+
+    expect(result).toBe("skipped");
+    expect(state.upserts).toHaveLength(0);
+  });
+});
+
 describe("createTranslationDispatcher", () => {
   it("returns immediately and processes jobs through the scheduled callback", async () => {
     const post = buildPost();
@@ -155,6 +168,46 @@ describe("createTranslationDispatcher", () => {
     expect(state.upserts).toHaveLength(0);
 
     scheduled[0]();
+    await vi.waitFor(() => {
+      expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "completed"]);
+    });
+  });
+
+  it("falls back to console.warn when no onError handler is provided", async () => {
+    const post = buildPost();
+    const { db } = buildMinimalDb(post);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const dispatch = createTranslationDispatcher({
+      db: {
+        ...db,
+        getPostById: async () => {
+          throw new Error("db is on fire");
+        }
+      } as BlogDb,
+      provider: successProvider,
+      schedule: (callback) => {
+        callback();
+      }
+    });
+
+    await dispatch([buildJob(post)]);
+
+    await vi.waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+
+    expect(String(warnSpy.mock.calls[0][0])).toContain("[translation]");
+    warnSpy.mockRestore();
+  });
+
+  it("defaults to setTimeout-based scheduling when no schedule override is supplied", async () => {
+    const post = buildPost();
+    const { db, state } = buildMinimalDb(post);
+    const dispatch = createTranslationDispatcher({ db, provider: successProvider });
+
+    await dispatch([buildJob(post)]);
+
     await vi.waitFor(() => {
       expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "completed"]);
     });

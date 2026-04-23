@@ -12,14 +12,18 @@ export default defineConfig({
         "src/**/*.test.ts",
         "src/test/**/*.ts",
         "src/db/types.ts",
+        "src/translation/types.ts",
+        "src/assets/post-editor-preview.generated.ts",
+        "src/markdown/browser-preview.ts",
+        "src/markdown/preview-controller.ts",
         "src/server.ts",
         "src/worker.ts"
       ],
       thresholds: {
-        statements: 68,
-        lines: 68,
-        branches: 72,
-        functions: 95
+        statements: 90,
+        lines: 90,
+        branches: 75,
+        functions: 92
       }
     }
   }

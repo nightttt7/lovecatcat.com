@@ -104,4 +104,22 @@ describe("createOpenAiTranslationProvider", () => {
   it("requires a non-empty api key", () => {
     expect(() => createOpenAiTranslationProvider({ apiKey: "" })).toThrow(/apiKey/);
   });
+
+  it("falls back to the system clock when no now override is provided", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => buildOkResponse("translated body"));
+    const provider = createOpenAiTranslationProvider({ apiKey: "sk-test", fetchImpl });
+    const before = Date.now();
+
+    const result = await provider.translatePost({
+      sourceLang: "en",
+      targetLang: "zh",
+      title: null,
+      body: "Body"
+    });
+
+    const translatedAtMs = Date.parse(result.translatedAt);
+    expect(Number.isNaN(translatedAtMs)).toBe(false);
+    expect(translatedAtMs).toBeGreaterThanOrEqual(before);
+    expect(translatedAtMs).toBeLessThanOrEqual(Date.now());
+  });
 });

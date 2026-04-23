@@ -52,6 +52,34 @@ const driver = "better-sqlite3";
 
     expect(detectPostSourceLanguage(title, body)).toBeNull();
   });
+
+  it("prefers zh when the title carries multiple Han characters even with mostly English body", () => {
+    const title = "中文标题";
+    const body = "This English body is much longer than the title and contains many words.";
+
+    expect(detectPostSourceLanguage(title, body)).toBe("zh");
+  });
+
+  it("returns zh when the body carries a strong han signal share above the upper threshold", () => {
+    const title = "Title";
+    const body = `${"中".repeat(20)} ${"a".repeat(400)}`;
+
+    expect(detectPostSourceLanguage(title, body)).toBe("zh");
+  });
+
+  it("returns zh when han share crosses the mid-range zh threshold without crossing the upper one", () => {
+    const title = "Title";
+    const body = `${"中".repeat(10)} ${"a".repeat(80)}`;
+
+    expect(detectPostSourceLanguage(title, body)).toBe("zh");
+  });
+
+  it("returns null when han share lands inside the ambiguous middle band", () => {
+    const title = "Title";
+    const body = `${"中".repeat(8)} ${"a".repeat(180)}`;
+
+    expect(detectPostSourceLanguage(title, body)).toBeNull();
+  });
 });
 
 describe("normalizeSelectedSourceLanguage", () => {
