@@ -195,10 +195,16 @@ Do not commit secrets into project files. Use system environment variables inste
 
 ### Environment Variables: Local Development
 
-Local development loads `.env` and `.env.development` in that order:
+Local development loads `.env` and `.env.development` in that order for non-secret local settings. `OPENAI_API_KEY_CAT` is intentionally not loaded from either file and should be configured as a Windows User or Machine environment variable instead:
+
+```powershell
+[System.Environment]::SetEnvironmentVariable('OPENAI_API_KEY_CAT', 'your_openai_api_key', 'User')
+```
+
+The local files still support values such as `OPENAI_MODEL_CAT`:
 
 - `ADMIN_EMAILS`: required, the list of admin email addresses, separated by commas, semicolons, or new lines.
-- `OPENAI_API_KEY_CAT`: required for translation generation. Used by both local development and the Cloudflare Worker. Without it, translation jobs are dropped with a warning.
+- `OPENAI_API_KEY_CAT`: required for translation generation, but do not place it in `.env` or `.env.development`. Local development should read it from the Windows User / Machine environment, and Cloudflare should read it from Wrangler-managed secrets. Without it, translation jobs are dropped with a warning.
 - `OPENAI_MODEL_CAT`: optional. Overrides the default OpenAI model used by the translation provider. Defaults to `gpt-5.4-mini`.
 - `DB_PATH`: optional, the local SQLite path. The default is the project-root `dev.db`.
 - `PORT`: optional, the local port. If occupied, the app automatically switches to another available port.
@@ -236,7 +242,7 @@ binding = "DB"
 database_name = "lovecatcat-preview"
 ```
 
-The translation pipeline shares the same OpenAI API across local development, preview, and production. It only depends on the `DB` D1 binding plus the `OPENAI_API_KEY_CAT` secret defined per environment in Wrangler.
+The translation pipeline shares the same OpenAI API across local development, preview, and production. Locally, `OPENAI_API_KEY_CAT` should come from the Windows User / Machine environment. In Cloudflare, it should come from the Wrangler secret defined per environment alongside the `DB` D1 binding.
 
 Preview D1, production D1, and local `dev.db` are maintained independently. They do not automatically share local mock accounts, posts, or comments. After deployment, account validation should use accounts that actually exist in the target environment database rather than assuming local seed data is present.
 
@@ -248,7 +254,7 @@ Preview D1, production D1, and local `dev.db` are maintained independently. They
 - Translation runs asynchronously via the OpenAI API. The translation row is marked `processing` immediately so the editor reflects the in-flight state on reload, then transitions to `completed` or `failed` once the OpenAI call returns.
 - After a translation completes, admins can reload the editor to review the translated title/body, manually edit it, and then publish the translated version.
 - Post pages prefer the current UI language when a completed translation exists, with a visible original/translated toggle.
-- The same OpenAI provider is used in every environment so dev, preview, and production behave consistently. Configure `OPENAI_API_KEY_CAT` locally as an environment variable and as a Wrangler secret for preview and production.
+- The same OpenAI provider is used in every environment so dev, preview, and production behave consistently. Configure `OPENAI_API_KEY_CAT` locally as a Windows User / Machine environment variable and as a Wrangler secret for preview and production.
 
 ## Coding Standards
 

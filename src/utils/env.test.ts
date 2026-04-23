@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 describe("loadLocalEnvFiles", () => {
-  it("loads local env files, strips quotes, and preserves existing process env", () => {
+  it("loads local env files, strips quotes, skips disallowed keys, and preserves existing process env", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "lovecatcat-env-"));
     tempDirs.push(tempDir);
 
@@ -36,6 +36,7 @@ describe("loadLocalEnvFiles", () => {
       [
         "# comment",
         "BASE_VALUE=from-env",
+        "OPENAI_API_KEY_CAT=from-dotenv",
         "QUOTED=\"hello world\"",
         "SINGLE='quoted value'",
         "INVALID_LINE"
@@ -46,6 +47,7 @@ describe("loadLocalEnvFiles", () => {
       [
         "BASE_VALUE=from-development",
         "DEV_ONLY=local",
+        "OPENAI_MODEL_CAT=gpt-5.4-mini",
         "LOCKED=should-not-overwrite"
       ].join("\n")
     );
@@ -58,6 +60,8 @@ describe("loadLocalEnvFiles", () => {
     expect(process.env.DEV_ONLY).toBe("local");
     expect(process.env.QUOTED).toBe("hello world");
     expect(process.env.SINGLE).toBe("quoted value");
+    expect(process.env.OPENAI_API_KEY_CAT).toBeUndefined();
+    expect(process.env.OPENAI_MODEL_CAT).toBe("gpt-5.4-mini");
     expect(process.env.LOCKED).toBe("existing");
     expect(process.env.INVALID_LINE).toBeUndefined();
   });
