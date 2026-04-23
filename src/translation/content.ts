@@ -114,7 +114,3 @@ export const hashPostTranslationSource = ({
 }) => {
   return toHex(sha256(encoder.encode(JSON.stringify({ title, body, sourceLang }))));
 };
-
-export const getWorkersAiLanguageName = (lang: Lang) => {
-  return lang === "zh" ? "chinese" : "english";
-};

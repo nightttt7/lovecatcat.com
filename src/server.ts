@@ -1,10 +1,10 @@
 import { serve } from "@hono/node-server";
+import path from "node:path";
 import { createApp } from "./app";
 import { getSiteConfig } from "./config";
 import { createSqliteDb } from "./db/sqlite";
-import path from "node:path";
-import { createLocalTranslationDispatcher } from "./translation/local-runner";
-import { createLocalDevTranslationProvider } from "./translation/provider";
+import { createTranslationDispatcher } from "./translation/dispatcher";
+import { createOpenAiTranslationProvider, DEFAULT_OPENAI_TRANSLATION_MODEL } from "./translation/openai";
 import { parseAdminEmails } from "./utils/auth";
 import { loadLocalEnvFiles } from "./utils/env";
 import { findAvailablePort, parsePort } from "./utils/port";
@@ -14,47 +14,44 @@ loadLocalEnvFiles();
 const dbPath = process.env.DB_PATH ?? path.resolve(process.cwd(), "dev.db");
 const sqliteDb = createSqliteDb({ dbPath, readonly: false });
 
-const parseEnvNumber = (value: string | undefined, fallback: number) => {
-  if (value === undefined) {
-    return fallback;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
+const openAiApiKey = process.env.OPENAI_API_KEY_CAT ?? "";
+const openAiModel = process.env.OPENAI_MODEL_CAT;
 
-const localTranslationFailureRate = parseEnvNumber(process.env.LOCAL_TRANSLATION_FAILURE_RATE, 0);
-const rawMinDelay = parseEnvNumber(process.env.LOCAL_TRANSLATION_MIN_DELAY_MS, 800);
-const rawMaxDelay = parseEnvNumber(process.env.LOCAL_TRANSLATION_MAX_DELAY_MS, 2000);
-const minLocalTranslationDelayMs = Math.max(0, Math.min(rawMinDelay, rawMaxDelay));
-const maxLocalTranslationDelayMs = Math.max(minLocalTranslationDelayMs, rawMaxDelay);
+const dispatchTranslationJobs = openAiApiKey
+  ? createTranslationDispatcher({
+      db: sqliteDb,
+      provider: createOpenAiTranslationProvider({
+        apiKey: openAiApiKey,
+        model: openAiModel
+      }),
+      onError: (error, job) => {
+        console.warn(
+          `[translation] post ${job.postId} -> ${job.targetLang} failed:`,
+          error instanceof Error ? error.message : error
+        );
+      }
+    })
+  : null;
 
-const localTranslationProvider = createLocalDevTranslationProvider({
-  failureRate: localTranslationFailureRate
-});
-
-const dispatchLocalTranslationJobs = createLocalTranslationDispatcher({
-  db: sqliteDb,
-  provider: localTranslationProvider,
-  schedule: (callback) => {
-    const span = maxLocalTranslationDelayMs - minLocalTranslationDelayMs;
-    const delay = minLocalTranslationDelayMs + Math.floor(Math.random() * (span + 1));
-    const timer = setTimeout(callback, delay);
-    timer.unref?.();
-  },
-  onError: (error, job) => {
-    console.warn(
-      `[local-translation] post ${job.postId} -> ${job.targetLang} failed:`,
-      error instanceof Error ? error.message : error
-    );
-  }
-});
+if (!dispatchTranslationJobs) {
+  console.warn(
+    "[translation] OPENAI_API_KEY_CAT is not set. Translation generation will fail until the key is configured."
+  );
+}
 
 const app = createApp({
   getSite: () => getSiteConfig(),
   getDb: () => sqliteDb,
   getAdminEmails: () => Array.from(parseAdminEmails(process.env.ADMIN_EMAILS)),
-  enqueueTranslationJobs: async (_c, jobs) => {
-    await dispatchLocalTranslationJobs(jobs);
+  getTranslationModel: () => openAiModel?.trim() || DEFAULT_OPENAI_TRANSLATION_MODEL,
+  runTranslationJobs: async (_c, jobs) => {
+    if (!dispatchTranslationJobs) {
+      console.warn(
+        `[translation] dropping ${jobs.length} job(s) because OPENAI_API_KEY_CAT is not configured.`
+      );
+      return;
+    }
+    await dispatchTranslationJobs(jobs);
   }
 });
 

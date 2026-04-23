@@ -15,6 +15,8 @@ import { formatDate } from "./utils/date";
 import { isLang, siteLanguages, t, type Lang } from "./utils/i18n";
 import { buildTagValue, DEFAULT_POST_TAG, displayTagValues, isDraftTag, normalizeTagFilterValue, tagInputValue } from "./utils/post-tags";
 import { detectPostSourceLanguage, getTranslationTargetLanguages, hashPostTranslationSource, normalizeSelectedSourceLanguage } from "./translation/content";
+import { DEFAULT_TRANSLATION_PROVIDER_ID } from "./translation/dispatcher";
+import { DEFAULT_OPENAI_TRANSLATION_MODEL } from "./translation/openai";
 import type { TranslationJobMessage, TranslationJobTrigger } from "./translation/types";
 
 type CurrentUser = {
@@ -44,7 +46,8 @@ export type AppOptions<TBindings extends Record<string, unknown> = Record<string
   getDb: (c: Context<AppEnv<TBindings>>) => BlogDb;
   getIsAdmin?: (c: Context<AppEnv<TBindings>>) => boolean;
   getAdminEmails?: (c: Context<AppEnv<TBindings>>) => string[];
-  enqueueTranslationJobs?: (c: Context<AppEnv<TBindings>>, jobs: TranslationJobMessage[]) => Promise<void>;
+  runTranslationJobs?: (c: Context<AppEnv<TBindings>>, jobs: TranslationJobMessage[]) => Promise<void>;
+  getTranslationModel?: (c: Context<AppEnv<TBindings>>) => string | undefined;
 };
 
 const PAGE_SIZE = 10;
@@ -211,7 +214,7 @@ const syncPostTranslationState = async <TBindings extends Record<string, unknown
       translatedBody: existingTranslation?.translated_body ?? null,
       status: existingTranslation?.translated_body || existingTranslation?.translated_title ? "stale" : "pending",
       sourceHash,
-      provider: existingTranslation?.provider ?? "workers-ai:@cf/meta/m2m100-1.2b",
+      provider: existingTranslation?.provider ?? DEFAULT_TRANSLATION_PROVIDER_ID,
       errorMessage: null,
       isMachineTranslation: true,
       translatedAt: existingTranslation?.translated_at ?? null
@@ -227,7 +230,7 @@ const syncPostTranslationState = async <TBindings extends Record<string, unknown
   }
 
   if (jobs.length > 0) {
-    await options.enqueueTranslationJobs?.(c, jobs);
+    await options.runTranslationJobs?.(c, jobs);
   }
 
   return jobs.length;
@@ -496,6 +499,7 @@ const renderPostTranslationSection = ({
   sourceLang,
   detectedSourceLang,
   translation,
+  translationModel,
   error,
   notice
 }: {
@@ -504,11 +508,13 @@ const renderPostTranslationSection = ({
   sourceLang: Lang;
   detectedSourceLang: Lang | null;
   translation: PostTranslationRow | null;
+  translationModel?: string;
   error?: string;
   notice?: string;
 }) => {
   const targetLang = getTranslationTargetLanguage(sourceLang);
   const actionLabel = translation ? t("translationRegenerateAction", lang) : t("translationGenerateAction", lang);
+  const configuredModel = translationModel?.trim() || DEFAULT_OPENAI_TRANSLATION_MODEL;
 
   return html`
     <div class="Box box-shadow mt-4">
@@ -534,6 +540,10 @@ const renderPostTranslationSection = ({
           <div class="mb-3">
             <p class="text-bold mb-1">${t("translationStatusLabel", lang)}</p>
             <p class="mb-0">${t(getTranslationStatusLabelKey(translation?.status), lang)}</p>
+          </div>
+          <div class="mb-3">
+            <p class="text-bold mb-1">${t("translationModelLabel", lang)}</p>
+            <p class="mb-0 text-mono">${configuredModel}</p>
           </div>
           <button type="submit" class="btn">${actionLabel}</button>
         </form>
@@ -1316,6 +1326,7 @@ const renderEditPostPage = <TBindings extends Record<string, unknown>>({
           sourceLang: translationSourceLang ?? selectedSourceLang,
           detectedSourceLang,
           translation,
+          translationModel: options.getTranslationModel?.(c),
           error: translationError,
           notice: translationNotice
         })

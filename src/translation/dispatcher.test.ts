@@ -7,13 +7,10 @@ import type {
 } from "../db/types";
 import { hashPostTranslationSource } from "./content";
 import {
-  createLocalTranslationDispatcher,
-  processLocalTranslationJob
-} from "./local-runner";
-import {
-  createLocalDevTranslationProvider,
-  LOCAL_DEV_TRANSLATION_PROVIDER_ID
-} from "./provider";
+  createTranslationDispatcher,
+  DEFAULT_TRANSLATION_PROVIDER_ID,
+  processTranslationJob
+} from "./dispatcher";
 import type { TranslationJobMessage, TranslationProvider } from "./types";
 
 type MinimalDbState = {
@@ -74,20 +71,29 @@ const buildJob = (post: PostDetailRow, overrides: Partial<TranslationJobMessage>
   ...overrides
 });
 
-describe("processLocalTranslationJob", () => {
-  it("transitions a job from processing to completed using the local mock provider", async () => {
+const successProvider: TranslationProvider = {
+  async translatePost(input) {
+    return {
+      translatedTitle: input.title ? `[zh] ${input.title}` : null,
+      translatedBody: `[zh] ${input.body}`,
+      provider: "openai:test-model",
+      translatedAt: "2026-04-18T00:00:00.000Z"
+    };
+  }
+};
+
+describe("processTranslationJob", () => {
+  it("transitions a job from processing to completed", async () => {
     const post = buildPost();
     const { db, state } = buildMinimalDb(post);
-    const provider = createLocalDevTranslationProvider({
-      now: () => new Date("2026-04-18T00:00:00.000Z")
-    });
 
-    const result = await processLocalTranslationJob(buildJob(post), { db, provider });
+    const result = await processTranslationJob(buildJob(post), { db, provider: successProvider });
 
     expect(result).toBe("completed");
     expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "completed"]);
-    expect(state.upserts[1].provider).toBe(LOCAL_DEV_TRANSLATION_PROVIDER_ID);
-    expect(state.upserts[1].translatedBody).toContain("Original body");
+    expect(state.upserts[0].provider).toBe(DEFAULT_TRANSLATION_PROVIDER_ID);
+    expect(state.upserts[1].provider).toBe("openai:test-model");
+    expect(state.upserts[1].translatedBody).toBe("[zh] Original body");
     expect(state.upserts[1].errorMessage).toBeNull();
   });
 
@@ -100,7 +106,7 @@ describe("processLocalTranslationJob", () => {
       }
     };
 
-    const result = await processLocalTranslationJob(buildJob(post), { db, provider: failingProvider });
+    const result = await processTranslationJob(buildJob(post), { db, provider: failingProvider });
 
     expect(result).toBe("failed");
     expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "failed"]);
@@ -110,11 +116,10 @@ describe("processLocalTranslationJob", () => {
   it("skips processing when the source has changed since the job was scheduled", async () => {
     const post = buildPost({ body: "Updated body" });
     const { db, state } = buildMinimalDb(post);
-    const provider = createLocalDevTranslationProvider();
 
     const job = buildJob(post, { sourceHash: "stale-hash" });
 
-    const result = await processLocalTranslationJob(job, { db, provider });
+    const result = await processTranslationJob(job, { db, provider: successProvider });
 
     expect(result).toBe("skipped");
     expect(state.upserts).toHaveLength(0);
@@ -122,25 +127,23 @@ describe("processLocalTranslationJob", () => {
 
   it("skips processing when the post has been deleted", async () => {
     const { db, state } = buildMinimalDb(null);
-    const provider = createLocalDevTranslationProvider();
 
     const post = buildPost();
-    const result = await processLocalTranslationJob(buildJob(post), { db, provider });
+    const result = await processTranslationJob(buildJob(post), { db, provider: successProvider });
 
     expect(result).toBe("skipped");
     expect(state.upserts).toHaveLength(0);
   });
 });
 
-describe("createLocalTranslationDispatcher", () => {
+describe("createTranslationDispatcher", () => {
   it("returns immediately and processes jobs through the scheduled callback", async () => {
     const post = buildPost();
     const { db, state } = buildMinimalDb(post);
-    const provider = createLocalDevTranslationProvider();
     const scheduled: Array<() => void> = [];
-    const dispatch = createLocalTranslationDispatcher({
+    const dispatch = createTranslationDispatcher({
       db,
-      provider,
+      provider: successProvider,
       schedule: (callback) => {
         scheduled.push(callback);
       }
@@ -160,17 +163,16 @@ describe("createLocalTranslationDispatcher", () => {
   it("forwards processing errors to onError instead of crashing the dispatcher", async () => {
     const post = buildPost();
     const { db } = buildMinimalDb(post);
-    const provider = createLocalDevTranslationProvider();
     const onError = vi.fn();
 
-    const dispatch = createLocalTranslationDispatcher({
+    const dispatch = createTranslationDispatcher({
       db: {
         ...db,
         getPostById: async () => {
           throw new Error("db is on fire");
         }
       } as BlogDb,
-      provider,
+      provider: successProvider,
       schedule: (callback) => {
         callback();
       },

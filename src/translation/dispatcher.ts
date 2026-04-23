@@ -1,17 +1,12 @@
 import type { BlogDb } from "../db/types";
 import { isLang } from "../utils/i18n";
 import { hashPostTranslationSource } from "./content";
-import { LOCAL_DEV_TRANSLATION_PROVIDER_ID } from "./provider";
+import { OPENAI_TRANSLATION_PROVIDER_ID_PREFIX } from "./openai";
 import type { TranslationJobMessage, TranslationProvider } from "./types";
 
-export type LocalTranslationDispatcherOptions = {
-  db: BlogDb;
-  provider: TranslationProvider;
-  schedule?: (callback: () => void) => void;
-  onError?: (error: unknown, job: TranslationJobMessage) => void;
-};
+export const DEFAULT_TRANSLATION_PROVIDER_ID = `${OPENAI_TRANSLATION_PROVIDER_ID_PREFIX}unknown`;
 
-export const processLocalTranslationJob = async (
+export const processTranslationJob = async (
   job: TranslationJobMessage,
   { db, provider }: { db: BlogDb; provider: TranslationProvider }
 ): Promise<"completed" | "failed" | "skipped"> => {
@@ -47,7 +42,7 @@ export const processLocalTranslationJob = async (
     translatedBody: existingTranslation?.translated_body ?? null,
     status: "processing",
     sourceHash: job.sourceHash,
-    provider: existingTranslation?.provider ?? LOCAL_DEV_TRANSLATION_PROVIDER_ID,
+    provider: existingTranslation?.provider ?? DEFAULT_TRANSLATION_PROVIDER_ID,
     errorMessage: null,
     isMachineTranslation: true,
     translatedAt: existingTranslation?.translated_at ?? null
@@ -83,7 +78,7 @@ export const processLocalTranslationJob = async (
       translatedBody: existingTranslation?.translated_body ?? null,
       status: "failed",
       sourceHash: job.sourceHash,
-      provider: existingTranslation?.provider ?? LOCAL_DEV_TRANSLATION_PROVIDER_ID,
+      provider: existingTranslation?.provider ?? DEFAULT_TRANSLATION_PROVIDER_ID,
       errorMessage: error instanceof Error ? error.message : "Unknown translation error",
       isMachineTranslation: true,
       translatedAt: existingTranslation?.translated_at ?? null
@@ -93,18 +88,25 @@ export const processLocalTranslationJob = async (
   }
 };
 
-export const createLocalTranslationDispatcher = (options: LocalTranslationDispatcherOptions) => {
+export type TranslationDispatcherOptions = {
+  db: BlogDb;
+  provider: TranslationProvider;
+  schedule?: (callback: () => void) => void;
+  onError?: (error: unknown, job: TranslationJobMessage) => void;
+};
+
+export const createTranslationDispatcher = (options: TranslationDispatcherOptions) => {
   const { db, provider, schedule = (callback) => { setTimeout(callback, 0); }, onError } = options;
 
   return async (jobs: TranslationJobMessage[]) => {
     for (const job of jobs) {
       schedule(() => {
-        void processLocalTranslationJob(job, { db, provider }).catch((error) => {
+        void processTranslationJob(job, { db, provider }).catch((error) => {
           if (onError) {
             onError(error, job);
             return;
           }
-          console.warn(`[local-translation] job for post ${job.postId} -> ${job.targetLang} failed`, error);
+          console.warn(`[translation] job for post ${job.postId} -> ${job.targetLang} failed`, error);
         });
       });
     }

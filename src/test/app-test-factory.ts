@@ -20,6 +20,7 @@ export type AppTestState = {
   sessionUser: SessionUserRow | null;
   adminEmails: string[];
   overrideIsAdmin: boolean;
+  translationModel?: string;
   createdSession: CreateSessionInput | null;
   createdComment: CreateCommentInput | null;
   createdPost: CreatePostInput | null;
@@ -112,6 +113,7 @@ export const createAppTestContext = () => {
     sessionUser: null,
     adminEmails: [],
     overrideIsAdmin: false,
+    translationModel: undefined,
     createdSession: null,
     createdComment: null,
     createdPost: null,
@@ -199,7 +201,8 @@ export const createAppTestContext = () => {
     getDb: () => mockDb,
     getIsAdmin: () => state.overrideIsAdmin,
     getAdminEmails: () => state.adminEmails,
-    enqueueTranslationJobs: async (_c, jobs) => {
+    getTranslationModel: () => state.translationModel,
+    runTranslationJobs: async (_c, jobs) => {
       state.enqueuedTranslationJobs.push(...jobs);
     }
   };

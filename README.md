@@ -88,7 +88,7 @@ The project uses one shared application layer with two runtime entry points:
 - [src/markdown](src/markdown): shared Markdown rendering, sanitization, and browser preview logic.
 - [src/render/layout.ts](src/render/layout.ts): shared page layout rendering.
 - [src/utils](src/utils): shared logic for auth, access control, dates, language switching, and related helpers.
-- [src/translation](src/translation): source-language detection, translation hashing, Workers AI integration, and queue message types.
+- [src/translation](src/translation): source-language detection, translation hashing, OpenAI translation provider, and shared dispatcher.
 
 The data flow is:
 
@@ -96,7 +96,7 @@ The data flow is:
 
 The async translation flow is:
 
-`post save -> source post saved -> admin opens the post editor -> source-language detection / manual confirmation -> generate translated version -> translation rows marked pending/stale -> Cloudflare Queue job -> Worker consumer -> Workers AI translation -> D1 post_translations update -> admin can manually revise translated title/body`
+`post save -> source post saved -> admin opens the post editor -> source-language detection / manual confirmation -> admin clicks generate translation -> translation row marked pending/processing -> in-process OpenAI translation (waitUntil on Cloudflare, fire-and-forget on Node) -> post_translations updated to completed/failed -> admin reloads editor to review and optionally edit the translated title/body before publishing`
 
 ## Project Structure
 
@@ -152,12 +152,13 @@ git switch dev
 # Confirm the Cloudflare account and token are pointing to the correct account first
 npx wrangler whoami
 
-# Ensure the preview translation queue exists before the first preview deploy
-npx wrangler queues create lovecatcat-preview-post-translation
-
 # Configure ADMIN_EMAILS for preview and production if needed
 npx wrangler secret put ADMIN_EMAILS --env preview
 npx wrangler secret put ADMIN_EMAILS
+
+# Configure the OpenAI API key used by the translation pipeline
+npx wrangler secret put OPENAI_API_KEY_CAT --env preview
+npx wrangler secret put OPENAI_API_KEY_CAT
 
 # Deploy preview first
 npm run deploy:preview
@@ -179,9 +180,6 @@ npm run deploy:production
 The current production Worker is `lovecatcat`, backed by database `lovecatcat-prod`, and served at `https://lovecatcat.com`.
 
 The preview Worker is `lovecatcat-preview`, backed by database `lovecatcat-preview`, with the stable preview URL `https://lovecatcat-preview.nightttt7.workers.dev`.
-
-The preview translation queue is `lovecatcat-preview-post-translation`. If this queue has not been created yet in the Cloudflare account, `npm run deploy:preview` will fail until you run `npx wrangler queues create lovecatcat-preview-post-translation` once.
-
 Preview is intended only for short-lived UAT from `dev`. After validation, run `npm run deploy:preview:inactive` to disable the `workers.dev` entry so it does not remain publicly accessible, then merge the approved `dev` state into `master` before running production deployment. Re-run `npm run deploy:preview` when the next UAT cycle starts.
 
 Before any deploy, confirm that `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `npx wrangler whoami` are all correct, and that `ADMIN_EMAILS` has been configured separately for preview and production.
@@ -200,6 +198,8 @@ Do not commit secrets into project files. Use system environment variables inste
 Local development loads `.env` and `.env.development` in that order:
 
 - `ADMIN_EMAILS`: required, the list of admin email addresses, separated by commas, semicolons, or new lines.
+- `OPENAI_API_KEY_CAT`: required for translation generation. Used by both local development and the Cloudflare Worker. Without it, translation jobs are dropped with a warning.
+- `OPENAI_MODEL_CAT`: optional. Overrides the default OpenAI model used by the translation provider. Defaults to `gpt-5.4-mini`.
 - `DB_PATH`: optional, the local SQLite path. The default is the project-root `dev.db`.
 - `PORT`: optional, the local port. If occupied, the app automatically switches to another available port.
 
@@ -207,11 +207,13 @@ Local development loads `.env` and `.env.development` in that order:
 
 ### Environment Variables: Deploy
 
-- Cloudflare Worker runtime: `ADMIN_EMAILS` must be configured separately for preview and production because they are isolated environment secrets and do not inherit automatically. Use Wrangler to write them directly to Cloudflare:
+- Cloudflare Worker runtime: both `ADMIN_EMAILS` and `OPENAI_API_KEY_CAT` must be configured separately for preview and production because they are isolated environment secrets and do not inherit automatically. Use Wrangler to write them directly to Cloudflare:
 
 ```bash
 npx wrangler secret put ADMIN_EMAILS --env preview
 npx wrangler secret put ADMIN_EMAILS
+npx wrangler secret put OPENAI_API_KEY_CAT --env preview
+npx wrangler secret put OPENAI_API_KEY_CAT
 ```
 
 For example, enter:
@@ -234,23 +236,19 @@ binding = "DB"
 database_name = "lovecatcat-preview"
 ```
 
-The translation pipeline also depends on two Cloudflare bindings configured in [wrangler.toml](wrangler.toml):
-
-- `AI`: Workers AI binding used by the queue consumer for translation.
-- `TRANSLATION_QUEUE`: Cloudflare Queue used for async translation jobs.
+The translation pipeline shares the same OpenAI API across local development, preview, and production. It only depends on the `DB` D1 binding plus the `OPENAI_API_KEY_CAT` secret defined per environment in Wrangler.
 
 Preview D1, production D1, and local `dev.db` are maintained independently. They do not automatically share local mock accounts, posts, or comments. After deployment, account validation should use accounts that actually exist in the target environment database rather than assuming local seed data is present.
 
 ## Translation Pipeline
 
 - `posts` stores the source content, and `post_translations` stores per-language translated variants.
-- Saving a post stores the source language but does not auto-generate translated versions anymore.
+- Saving a post stores the source language but does not auto-generate translated versions.
 - In the post editor, admins can manually trigger translation generation after reviewing or overriding the detected source language.
-- After a translation completes, admins can manually edit the translated title and translated body.
+- Translation runs asynchronously via the OpenAI API. The translation row is marked `processing` immediately so the editor reflects the in-flight state on reload, then transitions to `completed` or `failed` once the OpenAI call returns.
+- After a translation completes, admins can reload the editor to review the translated title/body, manually edit it, and then publish the translated version.
 - Post pages prefer the current UI language when a completed translation exists, with a visible original/translated toggle.
-- `npm run dev` simulates the async pipeline locally with a marked DEV placeholder instead of real AI output.
-- `LOCAL_TRANSLATION_MIN_DELAY_MS`, `LOCAL_TRANSLATION_MAX_DELAY_MS`, and `LOCAL_TRANSLATION_FAILURE_RATE` can be used to tune local delay and failure behavior.
-- Preview and production use the real Cloudflare Queue plus Workers AI pipeline.
+- The same OpenAI provider is used in every environment so dev, preview, and production behave consistently. Configure `OPENAI_API_KEY_CAT` locally as an environment variable and as a Wrangler secret for preview and production.
 
 ## Coding Standards
 

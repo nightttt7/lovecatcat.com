@@ -173,6 +173,7 @@ describe("createApp admin and post editor routes", () => {
 
   it("renders the edit form with existing draft values", async () => {
     setSignedInAdmin();
+    state.translationModel = "gpt-5.4-mini";
     mockDb.getPostById = async () => createPostDetail({ is_private: 1 });
 
     const res = await request("/post/7/edit", undefined, true);
@@ -192,6 +193,8 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain('action="/post/7/translation/generate"');
     expect(html).toContain('action="/post/7/translation"');
     expect(html).toContain("尚未生成");
+    expect(html).toContain("使用模型");
+    expect(html).toContain("gpt-5.4-mini");
   });
 
   it("renders translated posts with a translation notice and lets readers switch back to the original", async () => {
