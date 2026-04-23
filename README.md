@@ -96,7 +96,7 @@ The data flow is:
 
 The async translation flow is:
 
-`post save -> source-language detection -> source post saved -> translation rows marked pending/stale -> Cloudflare Queue job -> Worker consumer -> Workers AI translation -> D1 post_translations update`
+`post save -> source post saved -> admin opens the post editor -> source-language detection / manual confirmation -> generate translated version -> translation rows marked pending/stale -> Cloudflare Queue job -> Worker consumer -> Workers AI translation -> D1 post_translations update -> admin can manually revise translated title/body`
 
 ## Project Structure
 
@@ -244,7 +244,9 @@ Preview D1, production D1, and local `dev.db` are maintained independently. They
 ## Translation Pipeline
 
 - `posts` stores the source content, and `post_translations` stores per-language translated variants.
-- Saving a post auto-detects the source language, marks target translations as `pending` or `stale`, and enqueues async translation work.
+- Saving a post stores the source language but does not auto-generate translated versions anymore.
+- In the post editor, admins can manually trigger translation generation after reviewing or overriding the detected source language.
+- After a translation completes, admins can manually edit the translated title and translated body.
 - Post pages prefer the current UI language when a completed translation exists, with a visible original/translated toggle.
 - `npm run dev` simulates the async pipeline locally with a marked DEV placeholder instead of real AI output.
 - `LOCAL_TRANSLATION_MIN_DELAY_MS`, `LOCAL_TRANSLATION_MAX_DELAY_MS`, and `LOCAL_TRANSLATION_FAILURE_RATE` can be used to tune local delay and failure behavior.

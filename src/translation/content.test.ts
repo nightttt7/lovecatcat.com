@@ -12,7 +12,7 @@ describe("detectPostSourceLanguage", () => {
 部署时我还会检查 preview workflow、admin login、pagination layout 和 comment form 的表现。
 `;
 
-    expect(detectPostSourceLanguage(title, body, "en")).toBe("zh");
+    expect(detectPostSourceLanguage(title, body)).toBe("zh");
   });
 
   it("keeps English posts as en when they contain only a tiny amount of Chinese", () => {
@@ -22,7 +22,7 @@ This English maintenance note validates the preview deployment workflow, checks 
 and reviews SQLite migration output. A small label such as 中文按钮 should not flip the whole article.
 `;
 
-    expect(detectPostSourceLanguage(title, body, "zh")).toBe("en");
+    expect(detectPostSourceLanguage(title, body)).toBe("en");
   });
 
   it("ignores markdown code and urls when detecting language", () => {
@@ -39,21 +39,32 @@ const driver = "better-sqlite3";
 `;
 
     const normalizedBody = body.replace(/\u0006/g, "`");
-    expect(detectPostSourceLanguage(title, normalizedBody, "en")).toBe("zh");
+    expect(detectPostSourceLanguage(title, normalizedBody)).toBe("zh");
   });
 
-  it("falls back when no language signal exists", () => {
-    expect(detectPostSourceLanguage("12345", "--- ***", "en")).toBe("en");
+  it("returns null when no language signal exists", () => {
+    expect(detectPostSourceLanguage("12345", "--- ***")).toBeNull();
+  });
+
+  it("returns null when the language signal stays ambiguous", () => {
+    const title = "Preview 中";
+    const body = "This draft is mostly English for deployment review and adds 少量 hints only.";
+
+    expect(detectPostSourceLanguage(title, body)).toBeNull();
   });
 });
 
 describe("normalizeSelectedSourceLanguage", () => {
   it("uses the selected language when it is valid", () => {
-    expect(normalizeSelectedSourceLanguage("en", "zh")).toBe("en");
+    expect(normalizeSelectedSourceLanguage("en", "zh", "zh")).toBe("en");
   });
 
   it("falls back to detected language when the value is invalid", () => {
-    expect(normalizeSelectedSourceLanguage("fr", "zh")).toBe("zh");
+    expect(normalizeSelectedSourceLanguage("fr", "zh", "en")).toBe("zh");
+  });
+
+  it("falls back to the provided fallback language when detection is unclear", () => {
+    expect(normalizeSelectedSourceLanguage(undefined, null, "en")).toBe("en");
   });
 });
 

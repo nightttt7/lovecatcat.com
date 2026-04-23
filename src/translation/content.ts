@@ -42,14 +42,14 @@ const getLanguageSignal = (value: string) => {
   };
 };
 
-export const detectPostSourceLanguage = (title: string, body: string, fallback: Lang = "zh"): Lang => {
+export const detectPostSourceLanguage = (title: string, body: string): Lang | null => {
   const titleSignal = getLanguageSignal(title);
   const bodySignal = getLanguageSignal(body);
   const weightedHanCount = titleSignal.hanCount * 3 + bodySignal.hanCount;
   const weightedLatinLetterCount = titleSignal.latinLetterCount * 2 + bodySignal.latinLetterCount;
 
   if (weightedHanCount === 0 && weightedLatinLetterCount === 0) {
-    return fallback;
+    return null;
   }
 
   if (weightedHanCount === 0) {
@@ -76,11 +76,27 @@ export const detectPostSourceLanguage = (title: string, body: string, fallback: 
     return "zh";
   }
 
-  return hanShare >= 0.05 ? "zh" : "en";
+  if (hanShare >= 0.08) {
+    return "zh";
+  }
+
+  if (hanShare <= 0.02) {
+    return "en";
+  }
+
+  return null;
 };
 
-export const normalizeSelectedSourceLanguage = (value: string | undefined, detectedLanguage: Lang) => {
-  return value && isLang(value) ? value : detectedLanguage;
+export const normalizeSelectedSourceLanguage = (
+  value: string | undefined,
+  detectedLanguage: Lang | null,
+  fallbackLanguage: Lang
+) => {
+  if (value && isLang(value)) {
+    return value;
+  }
+
+  return detectedLanguage ?? fallbackLanguage;
 };
 
 export const getTranslationTargetLanguages = (sourceLang: Lang) => {

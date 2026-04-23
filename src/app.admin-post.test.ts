@@ -188,6 +188,10 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain('option value="zh" selected');
     expect(html).toContain('data-post-editor-empty-state="开始输入 Markdown，这里会即时显示预览。"');
     expect(html).toContain(">Existing body<");
+    expect(html).toContain("翻译版本");
+    expect(html).toContain('action="/post/7/translation/generate"');
+    expect(html).toContain('action="/post/7/translation"');
+    expect(html).toContain("尚未生成");
   });
 
   it("renders translated posts with a translation notice and lets readers switch back to the original", async () => {
@@ -219,6 +223,27 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain("翻译后的标题 (原标题 [Original title])");
     expect(html).not.toContain("翻译后的标题（原标题 [Original title]）");
     expect(html).toContain("翻译后的内容");
+  });
+
+  it("renders manually edited translations with the generic translated notice", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "Original title", body: "Original body", source_lang: "en", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({
+      post_id: 7,
+      lang: "zh",
+      translated_title: "手动修改后的标题",
+      translated_body: "手动修改后的内容",
+      status: "completed",
+      is_machine_translation: 0
+    });
+
+    const res = await request("/posts/7", { headers: { cookie: "lang=zh" } });
+
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    expect(html).toContain("当前阅读的是翻译版本");
+    expect(html).not.toContain("机器翻译版本");
   });
 
   it("renders the original post body when the reader explicitly requests it", async () => {
@@ -380,6 +405,40 @@ describe("createApp admin and post editor routes", () => {
     });
   });
 
+  it("marks existing translations as stale when the source post changes", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({ source_lang: "en", tag: "notes" });
+    mockDb.listPostTranslations = async () => [
+      createPostTranslation({
+        post_id: 7,
+        lang: "zh",
+        translated_title: "旧标题",
+        translated_body: "旧正文",
+        status: "completed",
+        source_hash: "old-hash"
+      })
+    ];
+
+    const res = await submitForm(
+      "/post/7/edit",
+      {
+        title: "Updated",
+        tag: "notes",
+        body: "Updated body"
+      },
+      true
+    );
+
+    expect(res.status).toBe(302);
+    expect(state.upsertedTranslations).toHaveLength(1);
+    expect(state.upsertedTranslations[0]).toMatchObject({
+      postId: 7,
+      lang: "zh",
+      status: "stale"
+    });
+    expect(state.enqueuedTranslationJobs).toHaveLength(0);
+  });
+
   it("updates owned posts to private visibility", async () => {
     setSignedInAdmin();
     mockDb.getPostById = async () => createPostDetail();
@@ -403,6 +462,71 @@ describe("createApp admin and post editor routes", () => {
       sourceLang: "en",
       tag: "notes",
       isPrivate: true
+    });
+  });
+
+  it("queues translation generation only when the admin clicks generate translated version", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({
+      title: "English title",
+      body: "English body",
+      source_lang: "en",
+      tag: "notes",
+      is_draft: 0
+    });
+
+    const res = await submitForm(
+      "/post/7/translation/generate",
+      {
+        sourceLang: "en"
+      },
+      true
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/post/7/edit?translation=queued");
+    expect(state.upsertedTranslations).toHaveLength(1);
+    expect(state.upsertedTranslations[0]).toMatchObject({
+      postId: 7,
+      lang: "zh",
+      status: "pending",
+      isMachineTranslation: true
+    });
+    expect(state.enqueuedTranslationJobs).toEqual([
+      expect.objectContaining({ postId: 7, sourceLang: "en", targetLang: "zh", trigger: "update" })
+    ]);
+  });
+
+  it("lets admins save a manually edited translated version", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({
+      title: "English title",
+      body: "English body",
+      source_lang: "en",
+      tag: "notes",
+      is_draft: 0
+    });
+
+    const res = await submitForm(
+      "/post/7/translation",
+      {
+        translatedTitle: "中文标题",
+        translatedBody: "中文正文"
+      },
+      true
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/post/7/edit?translation=saved");
+    expect(state.upsertedTranslations).toHaveLength(1);
+    expect(state.upsertedTranslations[0]).toMatchObject({
+      postId: 7,
+      lang: "zh",
+      translatedTitle: "中文标题",
+      translatedBody: "中文正文",
+      status: "completed",
+      provider: "manual:editor",
+      isMachineTranslation: false
     });
   });
 
