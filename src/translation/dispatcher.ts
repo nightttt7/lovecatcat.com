@@ -62,12 +62,12 @@ export const processTranslationJob = async (
       lang: job.targetLang,
       translatedTitle: translatedPost.translatedTitle,
       translatedBody: translatedPost.translatedBody,
-      status: "completed",
+      status: "draft",
       sourceHash: job.sourceHash,
       provider: translatedPost.provider,
       errorMessage: null,
       isMachineTranslation: true,
-      isPublished: existingTranslation?.is_published === 1,
+      isPublished: false,
       translatedAt: translatedPost.translatedAt
     });
 

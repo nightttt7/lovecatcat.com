@@ -4,6 +4,7 @@ import type { TranslationProvider } from "./types";
 
 export const DEFAULT_OPENAI_TRANSLATION_MODEL = "gpt-5.4-mini";
 export const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
+export const OPENAI_REQUEST_TIMEOUT_MS = 60_000;
 
 type OpenAiChatMessage = {
   role: "system" | "user";
@@ -24,6 +25,7 @@ export type OpenAiTranslationProviderOptions = {
   endpoint?: string;
   fetchImpl?: typeof fetch;
   now?: () => Date;
+  timeoutMs?: number;
 };
 
 const callOpenAiChat = async ({
@@ -31,26 +33,41 @@ const callOpenAiChat = async ({
   model,
   endpoint,
   fetchImpl,
-  messages
+  messages,
+  timeoutMs
 }: {
   apiKey: string;
   model: string;
   endpoint: string;
   fetchImpl: typeof fetch;
   messages: OpenAiChatMessage[];
+  timeoutMs: number;
 }) => {
-  const response = await fetchImpl(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      messages
-    })
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let response: Response;
+  try {
+    response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.2,
+        messages
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if ((error as Error)?.name === "AbortError") {
+      throw new Error(`OpenAI request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
@@ -68,7 +85,7 @@ const callOpenAiChat = async ({
 };
 
 const translateTitle = async (
-  config: { apiKey: string; model: string; endpoint: string; fetchImpl: typeof fetch },
+  config: { apiKey: string; model: string; endpoint: string; fetchImpl: typeof fetch; timeoutMs: number },
   targetLang: Lang,
   title: string
 ) => {
@@ -82,7 +99,7 @@ const translateTitle = async (
 };
 
 const translateBody = async (
-  config: { apiKey: string; model: string; endpoint: string; fetchImpl: typeof fetch },
+  config: { apiKey: string; model: string; endpoint: string; fetchImpl: typeof fetch; timeoutMs: number },
   targetLang: Lang,
   body: string
 ) => {
@@ -107,7 +124,8 @@ export const createOpenAiTranslationProvider = (
   const endpoint = options.endpoint ?? OPENAI_CHAT_COMPLETIONS_URL;
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? (() => new Date());
-  const config = { apiKey, model, endpoint, fetchImpl };
+  const timeoutMs = options.timeoutMs ?? OPENAI_REQUEST_TIMEOUT_MS;
+  const config = { apiKey, model, endpoint, fetchImpl, timeoutMs };
 
   return {
     async translatePost(input) {

@@ -91,7 +91,7 @@ describe("processTranslationJob", () => {
     const result = await processTranslationJob(buildJob(post), { db, provider: successProvider });
 
     expect(result).toBe("completed");
-    expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "completed"]);
+    expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "draft"]);
     expect(state.upserts[0].provider).toBe(DEFAULT_TRANSLATION_PROVIDER_ID);
     expect(state.upserts[1].provider).toBe("openai:test-model");
     expect(state.upserts[1].translatedBody).toBe("[zh] Original body");
@@ -170,7 +170,7 @@ describe("createTranslationDispatcher", () => {
 
     scheduled[0]();
     await vi.waitFor(() => {
-      expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "completed"]);
+      expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "draft"]);
     });
   });
 
@@ -210,7 +210,7 @@ describe("createTranslationDispatcher", () => {
     await dispatch([buildJob(post)]);
 
     await vi.waitFor(() => {
-      expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "completed"]);
+      expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "draft"]);
     });
   });
 

@@ -1281,7 +1281,7 @@ const renderEditPostPage = <TBindings extends Record<string, unknown>>({
       body: renderPostEditorBody({
         lang,
         mode: "edit",
-        headerActions: html`<a href="/post/${post.id}/translation" class="btn mb-2">${t("editTranslationAction", lang)}</a>`,
+        headerActions: html`<div class="d-flex flex-wrap"><a href="${buildPostViewHref(post.id, "original")}" class="btn mb-2 mr-2">${t("readOriginalAction", lang)}</a><a href="${buildPostViewHref(post.id, "translation")}" class="btn mb-2 mr-2">${t("readTranslationAction", lang)}</a><a href="/post/${post.id}/translation" class="btn mb-2">${t("editTranslationAction", lang)}</a></div>`,
         isDraft,
         visibility,
         titleValue,
@@ -1346,6 +1346,8 @@ const renderPostTranslationPage = <TBindings extends Record<string, unknown>>({
             <p class="f6 text-gray mb-0">${post.title || t("untitled", lang)}</p>
           </div>
           <div class="d-flex flex-wrap">
+            <a href="${buildPostViewHref(post.id, "original")}" class="btn mb-2 mr-2">${t("readOriginalAction", lang)}</a>
+            <a href="${buildPostViewHref(post.id, "translation")}" class="btn mb-2 mr-2">${t("readTranslationAction", lang)}</a>
             <a href="/post/${post.id}/edit" class="btn mb-2">${t("editOriginalAction", lang)}</a>
           </div>
         </div>
@@ -2431,7 +2433,24 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const lang = c.get("lang");
     const detectedSourceLang = detectPostSourceLanguage(post.title ?? "", post.body ?? "");
     const selectedSourceLang = getStoredSourceLanguage(post.source_lang, lang);
-    const translation = await db.getPostTranslation(post.id, getTranslationTargetLanguage(selectedSourceLang));
+    let translation = await db.getPostTranslation(post.id, getTranslationTargetLanguage(selectedSourceLang));
+
+    // Auto-recover stuck translations: if status is pending/processing, re-enqueue the job.
+    // This handles dev server restarts, lost in-flight jobs, and provider hangs.
+    if (translation && (translation.status === "pending" || translation.status === "processing")) {
+      await syncPostTranslationState({
+        c,
+        db,
+        postId: post.id,
+        title: post.title ?? null,
+        body: post.body ?? "",
+        sourceLang: selectedSourceLang,
+        trigger: "update",
+        options
+      });
+      translation = await db.getPostTranslation(post.id, getTranslationTargetLanguage(selectedSourceLang));
+    }
+
     const translationNotice = getTranslationPageNotice(c.req.query("translation"), lang);
 
     return renderPostTranslationPage({
