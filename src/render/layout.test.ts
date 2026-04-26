@@ -87,8 +87,8 @@ describe("renderLayout", () => {
     });
 
     const html = result.toString();
-    expect(html).toMatch(/href=\/posts\/9\/original[\s\S]*>About<\/a/);
-    expect(html).toMatch(/href=\/posts\/10\/original[\s\S]*>Tools<\/a/);
+    expect(html).toMatch(/href=\/posts\/9[\s\S]*>About<\/a/);
+    expect(html).toMatch(/href=\/posts\/10[\s\S]*>Tools<\/a/);
     expect(html).toContain('aria-label="Open menu"');
     expect(html).toContain("New post");
     expect(html).toContain("Admin dashboard");
@@ -106,7 +106,7 @@ describe("renderLayout", () => {
     });
 
     const html = result.toString();
-    expectHtmlFragmentsInOrder(html, ['href=/posts/9/original', 'href=/posts/10/original']);
+    expectHtmlFragmentsInOrder(html, ['href=/posts/9', 'href=/posts/10']);
   });
 
   it("localizes tools link in Chinese by default", () => {
@@ -336,6 +336,22 @@ describe("renderLayout", () => {
         hasCompactPagination: true
       })
     ).toBe("minimal");
+  });
+
+  it("renders executable pagination script without server-side function serialization helpers", () => {
+    const result = renderLayout({
+      title: "Test",
+      description: "Test",
+      site: mockSiteConfig,
+      isAdmin: false,
+      body: '<div data-pagination-root><nav data-pagination-full></nav><nav data-pagination-compact></nav><nav data-pagination-minimal></nav><div data-pagination-measure-full></div><div data-pagination-measure-compact></div></div>'
+    });
+
+    const html = result.toString();
+    expect(html).toContain("const resolvePaginationMode");
+    expect(html).toContain("root.dataset.paginationMode = resolvePaginationMode");
+    expect(html).not.toContain("__name(");
+    expect(html).not.toContain("String(resolveResponsivePaginationMode)");
   });
 
   it("forces full pagination when there is no compact variant", () => {

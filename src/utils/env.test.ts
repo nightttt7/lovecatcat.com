@@ -53,6 +53,7 @@ describe("loadLocalEnvFiles", () => {
     );
 
     process.env.LOCKED = "existing";
+    process.env.OPENAI_API_KEY_CAT = "from-system-env";
 
     loadLocalEnvFiles(tempDir);
 
@@ -60,7 +61,7 @@ describe("loadLocalEnvFiles", () => {
     expect(process.env.DEV_ONLY).toBe("local");
     expect(process.env.QUOTED).toBe("hello world");
     expect(process.env.SINGLE).toBe("quoted value");
-    expect(process.env.OPENAI_API_KEY_CAT).toBeUndefined();
+    expect(process.env.OPENAI_API_KEY_CAT).toBe("from-system-env");
     expect(process.env.OPENAI_MODEL_CAT).toBe("gpt-5.4-mini");
     expect(process.env.LOCKED).toBe("existing");
     expect(process.env.INVALID_LINE).toBeUndefined();

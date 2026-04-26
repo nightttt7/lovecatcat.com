@@ -278,6 +278,52 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain('href="/posts/7/original"');
   });
 
+  it("redirects the default post reader to the translation for non-authors when languages differ", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", author_id: 5, source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7", { headers: { cookie: "lang=en" } });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/translation");
+  });
+
+  it("redirects the default post reader to the original for authors even when languages differ", async () => {
+    setSignedInAdmin({ id: 5 });
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", author_id: 5, source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7", { headers: { cookie: "lang=en" } }, true);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/original");
+  });
+
+  it("redirects admin non-authors to the translation when languages differ", async () => {
+    setSignedInAdmin({ id: 9 });
+    const translatedPost = createPostDetail({ id: 7, title: "Original title", body: "Original body", author_id: 5, source_lang: "en", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "zh", translated_title: "翻译后的标题", translated_body: "翻译后的内容", status: "completed" });
+
+    const res = await request("/posts/7", undefined, true);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/translation");
+  });
+
+  it("redirects the default post reader to the original when languages match", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", author_id: 5, source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7", { headers: { cookie: "lang=zh" } });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/original");
+  });
+
   it("uses ascii parentheses for translated titles in the Chinese UI", async () => {
     const translatedPost = createPostDetail({ id: 7, title: "Original title", body: "Original body", source_lang: "en", is_draft: 0 });
     mockDb.getPostById = async () => translatedPost;
@@ -329,6 +375,23 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain("original version");
     expect(html).not.toContain("machine-translated version");
     expect(html).not.toContain("original title [原文标题]");
+    expect(html).toContain('href="/posts/7/translation"');
+  });
+
+  it("does not show the translated-version flash when source and reader languages match", async () => {
+    setSignedInAdmin();
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7/original", { headers: { cookie: "lang=zh" } }, true);
+
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    expect(html).not.toContain('class="flash flash-warn mb-3"');
+    expect(html).not.toContain("阅读翻译版");
+    expect(html).toContain("查看翻译");
     expect(html).toContain('href="/posts/7/translation"');
   });
 

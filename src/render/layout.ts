@@ -47,12 +47,20 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
   const navLinks = site.navLinks.filter((link) => !link.requiresAdmin || isAdmin);
   const infoLinks: Array<{ href: string; label: string; active: boolean }> = [];
   if (aboutPostId) {
-    const href = postRoutes.original(aboutPostId);
-    infoLinks.push({ href, label: t("about", lang), active: activePath === href });
+    const href = postRoutes.detail(aboutPostId);
+    infoLinks.push({
+      href,
+      label: t("about", lang),
+      active: activePath === href || activePath === postRoutes.original(aboutPostId) || activePath === postRoutes.translation(aboutPostId)
+    });
   }
   if (toolsPostId) {
-    const href = postRoutes.original(toolsPostId);
-    infoLinks.push({ href, label: t("tools", lang), active: activePath === href });
+    const href = postRoutes.detail(toolsPostId);
+    infoLinks.push({
+      href,
+      label: t("tools", lang),
+      active: activePath === href || activePath === postRoutes.original(toolsPostId) || activePath === postRoutes.translation(toolsPostId)
+    });
   }
   const getNavLabel = (label: string, labelKey?: keyof typeof import("../utils/i18n").translations["zh"]) => {
     return labelKey ? t(labelKey, lang) : label;
@@ -569,12 +577,24 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
               return;
             }
 
+            const resolvePaginationMode = ({ rootWidth, fullWidth, compactWidth, hasCompactPagination }) => {
+              if (!hasCompactPagination) {
+                return "full";
+              }
+
+              if (fullWidth <= rootWidth) {
+                return "full";
+              }
+
+              return compactWidth <= rootWidth ? "compact" : "minimal";
+            };
+
             const updatePaginationMode = (root) => {
               const fullMeasure = root.querySelector("[data-pagination-measure-full]");
               const compactMeasure = root.querySelector("[data-pagination-measure-compact]");
               const compact = root.querySelector("[data-pagination-compact]");
 
-              root.dataset.paginationMode = ${String(resolveResponsivePaginationMode)}({
+              root.dataset.paginationMode = resolvePaginationMode({
                 rootWidth: root.clientWidth,
                 fullWidth: fullMeasure?.scrollWidth ?? 0,
                 compactWidth: compactMeasure?.scrollWidth ?? 0,

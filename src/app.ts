@@ -854,7 +854,7 @@ const renderManagedPosts = (posts: PostListRow[], lang: Lang, accessUser: Access
           <div class="action-card-row">
             <div class="action-card-main">
               <h3 class="h4 mb-1">
-                <a href="${postRoutes.original(post.id)}" class="text-bold color-fg-default action-card-title-link">${post.title || t("untitled", lang)}</a>
+                <a href="${postRoutes.detail(post.id)}" class="text-bold color-fg-default action-card-title-link">${post.title || t("untitled", lang)}</a>
               </h3>
               <div class="f6 text-gray action-card-meta">
                 <span>${t("author", lang)} ${post.author_name ?? getUnknownAuthorLabel(lang)}</span>
@@ -912,7 +912,7 @@ const renderCommentCards = (
                 <span>${formatDate(comment.timestamp, lang)}</span>
                 ${showPostLink && comment.post_id
                   ? html`
-                      <a href="${postRoutes.original(comment.post_id)}" class="action-card-title-link text-bold color-fg-default">${comment.post_title || t("untitled", lang)}</a>
+                      <a href="${postRoutes.detail(comment.post_id)}" class="action-card-title-link text-bold color-fg-default">${comment.post_title || t("untitled", lang)}</a>
                     `
                   : html``}
               </div>
@@ -1002,6 +1002,30 @@ const getPostTranslationUiState = (translation: PostTranslationRow | null): Post
   }
 
   return "unpublished";
+};
+
+const isPostAuthor = (accessUser: AccessUser, authorId: number | null) => {
+  return Boolean(accessUser && authorId !== null && accessUser.id === authorId);
+};
+
+const resolveDefaultPostDetailPath = ({
+  post,
+  accessUser,
+  sourceLang,
+  lang,
+  translationState
+}: {
+  post: PostDetailRow;
+  accessUser: AccessUser;
+  sourceLang: Lang;
+  lang: Lang;
+  translationState: PostTranslationUiState;
+}) => {
+  if (!isPostAuthor(accessUser, post.author_id) && sourceLang !== lang && translationState === "published") {
+    return postRoutes.translation(post.id);
+  }
+
+  return postRoutes.original(post.id);
 };
 
 const renderPostDeleteAction = (postId: number, lang: Lang, redirectTo: string) => {
@@ -1942,7 +1966,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
               html`<article class="Box box-shadow mb-3">
                 <div class="Box-body">
                   <h2 class="h3 mb-2">
-                    <a href="${postRoutes.original(post.id)}" class="text-bold color-fg-default post-title-link" title="${postTitleDisplayMap.get(post.id) || post.title || t("untitled", lang)}">${postTitleDisplayMap.get(post.id) || post.title || t("untitled", lang)}</a>
+                    <a href="${postRoutes.detail(post.id)}" class="text-bold color-fg-default post-title-link" title="${postTitleDisplayMap.get(post.id) || post.title || t("untitled", lang)}">${postTitleDisplayMap.get(post.id) || post.title || t("untitled", lang)}</a>
                   </h2>
                   <div class="f6 text-gray">
                     ${renderPostTagLabels(post.tag)}
@@ -2074,7 +2098,8 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const comments = await db.listComments(postId);
     const accessUser = getAccessUser(c);
     const currentPath = viewMode === "translation" ? postRoutes.translation(post.id) : postRoutes.original(post.id);
-    const translationNotice = translationState === "published"
+    const shouldShowTranslationNotice = sourceLang !== lang && translationState === "published";
+    const translationNotice = shouldShowTranslationNotice
       ? html`
           <div class="flash flash-warn mb-3">
             <div class="d-flex flex-justify-between flex-items-center flex-wrap">
@@ -2117,6 +2142,35 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       })
     );
   };
+
+  app.get(postRoutePatterns.detail, async (c) => {
+    const db = c.get("db");
+    const isAdmin = c.get("isAdmin");
+    const lang = c.get("lang");
+    const currentUser = c.get("currentUser");
+    const postId = Number(c.req.param("id"));
+
+    if (Number.isNaN(postId)) {
+      return c.notFound();
+    }
+
+    const post = await db.getPostById(postId, { includeDrafts: isAdmin, viewerId: currentUser?.id ?? null });
+    if (!post) {
+      return c.notFound();
+    }
+
+    const sourceLang = post.source_lang && isLang(post.source_lang) ? post.source_lang : "zh";
+    const translation = await db.getPostTranslation(postId, getTranslationTargetLanguage(sourceLang));
+    const accessUser = getAccessUser(c);
+
+    return c.redirect(resolveDefaultPostDetailPath({
+      post,
+      accessUser,
+      sourceLang,
+      lang,
+      translationState: getPostTranslationUiState(translation)
+    }));
+  });
 
   app.get(postRoutePatterns.original, renderPostDetailPage("original"));
   app.get(postRoutePatterns.translation, renderPostDetailPage("translation"));

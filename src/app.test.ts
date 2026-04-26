@@ -125,7 +125,7 @@ describe("createApp", () => {
       expect(res.status).toBe(200);
 
       const html = await res.text();
-  expectHtmlFragmentsInOrder(html, ['href=/posts/21/original', 'href=/posts/22/original']);
+      expectHtmlFragmentsInOrder(html, ['href=/posts/21', 'href=/posts/22']);
       expect(html).toContain(">关于<");
       expect(html).toContain(">工具<");
       expect(html).not.toMatch(/<header>[\s\S]*href=\/labels/);

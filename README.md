@@ -122,7 +122,9 @@ The async translation flow is:
 
 ## Available Routes
 
-The main routes currently include the home page `/` and post index `/posts`, post original pages `/posts/:id/original`, published translation pages `/posts/:id/translation`, comment submission `/posts/:id/comments`, authentication `/login` `/signup` `/logout`, the account page `/account`, admin post creation and editing `/posts/new` `/posts/:id/original/edit` `/posts/:id/translation/edit`, the admin dashboard `/admin`, user management `/admin/users/:id/block` `/unblock` `/delete`, and language switching via `/api/lang`.
+The main routes currently include the home page `/` and post index `/posts`, the default post reader `/posts/:id`, post original pages `/posts/:id/original`, published translation pages `/posts/:id/translation`, comment submission `/posts/:id/comments`, authentication `/login` `/signup` `/logout`, the account page `/account`, admin post creation and editing `/posts/new` `/posts/:id/original/edit` `/posts/:id/translation/edit`, the admin dashboard `/admin`, user management `/admin/users/:id/block` `/unblock` `/delete`, and language switching via `/api/lang`.
+
+The default post reader sends authors to the source-language page. For non-authors, when the post source language differs from the current UI language and a published translation exists, it sends them to the translated page.
 
 ## Getting Started
 
@@ -313,6 +315,8 @@ Only check for globally available `playwright` when browser automation is actual
 If you need to test the deployed preview environment, use the stable preview `workers.dev` URL.
 
 For mobile regression testing, default to Chrome / Playwright `Pixel 7` device emulation rather than a manually narrowed desktop window.
+
+On mobile, use the visible mobile menu for navigation and language switching; header links that exist for desktop can be hidden and should not be targeted directly. Also check browser `pageerror` / console errors and horizontal overflow during smoke runs.
 
 ## History Log
 - 2017-09-14: start project 
