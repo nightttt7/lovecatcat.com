@@ -34,12 +34,12 @@ describe("createApp route flows", () => {
   it("sets the language cookie and redirects back to the referer", async () => {
     const res = await request("/api/lang?to=en", {
       headers: {
-        referer: "/posts/1"
+        referer: "/posts/1/original"
       }
     });
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/posts/1");
+    expect(res.headers.get("location")).toBe("/posts/1/original");
     expect(res.headers.get("set-cookie")).toContain("lang=en");
   });
 
@@ -55,14 +55,14 @@ describe("createApp route flows", () => {
   it("prefills login next from the previous local page", async () => {
     const res = await request("/login", {
       headers: {
-        referer: "/posts/1?from=feed"
+        referer: "/posts/1/original?from=feed"
       }
     });
 
     expect(res.status).toBe(200);
 
     const html = await res.text();
-    expect(html).toContain('name="next" value="/posts/1?from=feed"');
+    expect(html).toContain('name="next" value="/posts/1/original?from=feed"');
   });
 
   it("renders login fields with credential autocomplete hints", async () => {
@@ -183,13 +183,13 @@ describe("createApp route flows", () => {
       false,
       {
         headers: {
-          referer: "/posts/1"
+          referer: "/posts/1/original"
         }
       }
     );
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/login?next=%2Fposts%2F1");
+    expect(res.headers.get("location")).toBe("/login?next=%2Fposts%2F1%2Foriginal");
   });
 
   it("does not mark the session cookie as secure when proxy headers say the browser used http", async () => {
@@ -207,7 +207,7 @@ describe("createApp route flows", () => {
       {
         email: "alice@example.com",
         password: "correct horse battery staple",
-        next: "/posts/1"
+        next: "/posts/1/original"
       },
       false,
       {
@@ -218,7 +218,7 @@ describe("createApp route flows", () => {
     );
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/posts/1");
+    expect(res.headers.get("location")).toBe("/posts/1/original");
     expect(res.headers.get("set-cookie")).toContain("lovecatcat_session=");
     expect(res.headers.get("set-cookie")).not.toContain("Secure");
   });
@@ -245,10 +245,10 @@ describe("createApp route flows", () => {
     mockDb.getPostById = async () => post;
 
     const longComment = "x".repeat(2500);
-    const res = await submitForm("/posts/1/comments", { body: longComment }, true);
+    const res = await submitForm("/posts/1/comments", { body: longComment, redirectTo: "/posts/1/original" }, true);
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/posts/1");
+    expect(res.headers.get("location")).toBe("/posts/1/original");
     expect(state.createdComment).toMatchObject({
       postId: 1,
       name: "alice",
@@ -259,17 +259,17 @@ describe("createApp route flows", () => {
   });
 
   it("requires admin access before showing the post editor", async () => {
-    const res = await request("/post");
+    const res = await request("/posts/new");
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/login?next=%2Fpost");
+    expect(res.headers.get("location")).toBe("/login?next=%2Fposts%2Fnew");
   });
 
   it("creates draft posts for admin users", async () => {
     setSignedInAdmin();
 
     const res = await submitForm(
-      "/post",
+      "/posts",
       {
         title: "Hello",
         tag: "news",
@@ -280,7 +280,7 @@ describe("createApp route flows", () => {
     );
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/post/77/translation");
+    expect(res.headers.get("location")).toBe("/posts/77/original");
     expect(state.createdPost).toEqual({
       title: "Hello",
       body: "Body",
@@ -298,7 +298,7 @@ describe("createApp route flows", () => {
     setSignedInAdmin();
 
     const res = await submitForm(
-      "/post",
+      "/posts",
       {
         title: "Secret",
         tag: "notes",
@@ -309,7 +309,7 @@ describe("createApp route flows", () => {
     );
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/post/77/translation");
+    expect(res.headers.get("location")).toBe("/posts/77/original");
     expect(state.createdPost).toEqual({
       title: "Secret",
       body: "Body",
@@ -385,13 +385,13 @@ describe("createApp route flows", () => {
         is_draft: 0
       });
 
-    const res = await request("/posts/7", undefined, true);
+    const res = await request("/posts/7/original", undefined, true);
 
     expect(res.status).toBe(200);
 
     const html = await res.text();
     expectDeleteConfirmationPanel(html, {
-      actionPath: "/admin/posts/7/delete",
+      actionPath: "/posts/7/delete",
       includesInteractiveHooks: true
     });
   });

@@ -2,6 +2,7 @@ import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import type { SiteConfig } from "../config";
 import { t, type Lang } from "../utils/i18n";
+import { postRoutes } from "../utils/routes";
 
 type LayoutUser = {
   username: string;
@@ -46,10 +47,12 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
   const navLinks = site.navLinks.filter((link) => !link.requiresAdmin || isAdmin);
   const infoLinks: Array<{ href: string; label: string; active: boolean }> = [];
   if (aboutPostId) {
-    infoLinks.push({ href: `/posts/${aboutPostId}`, label: t("about", lang), active: activePath === "/posts/" + aboutPostId });
+    const href = postRoutes.original(aboutPostId);
+    infoLinks.push({ href, label: t("about", lang), active: activePath === href });
   }
   if (toolsPostId) {
-    infoLinks.push({ href: `/posts/${toolsPostId}`, label: t("tools", lang), active: activePath === "/posts/" + toolsPostId });
+    const href = postRoutes.original(toolsPostId);
+    infoLinks.push({ href, label: t("tools", lang), active: activePath === href });
   }
   const getNavLabel = (label: string, labelKey?: keyof typeof import("../utils/i18n").translations["zh"]) => {
     return labelKey ? t(labelKey, lang) : label;
@@ -467,7 +470,7 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
           <div class="Header Header--dark hide-sm hide-md">
             <div class="container-lg d-flex flex-items-center width-full">
               <div class="Header-item">
-                <a href="/" class="Header-link f4 text-bold">${site.siteName}</a>
+                <a href="${postRoutes.index()}" class="Header-link f4 text-bold">${site.siteName}</a>
               </div>
               ${infoLinks.map((link) =>
                 link.active
@@ -517,7 +520,7 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
           <div class="Header Header--dark hide-lg hide-xl">
             <div class="container-lg d-flex flex-items-center width-full">
               <div class="Header-item">
-                <a href="/" class="Header-link f4 text-bold">${site.siteName}</a>
+                <a href="${postRoutes.index()}" class="Header-link f4 text-bold">${site.siteName}</a>
               </div>
               ${infoLinks.map((link) =>
                 link.active

@@ -14,6 +14,7 @@ import { createSessionToken, hashPassword, hashSessionToken, normalizeEmail, ver
 import { formatDate } from "./utils/date";
 import { isLang, siteLanguages, t, type Lang } from "./utils/i18n";
 import { buildTagValue, DEFAULT_POST_TAG, displayTagValues, isDraftTag, normalizeTagFilterValue, tagInputValue } from "./utils/post-tags";
+import { postRoutePatterns, postRoutes } from "./utils/routes";
 import { detectPostSourceLanguage, getTranslationTargetLanguages, hashPostTranslationSource, normalizeSelectedSourceLanguage } from "./translation/content";
 import { DEFAULT_TRANSLATION_PROVIDER_ID } from "./translation/dispatcher";
 import { DEFAULT_OPENAI_TRANSLATION_MODEL } from "./translation/openai";
@@ -150,10 +151,6 @@ const getTranslationStatusLabelKey = (status: PostTranslationStatus | null | und
     default:
       return "translationStatusMissing";
   }
-};
-
-const buildPostViewHref = (postId: number, view: "original" | "translation") => {
-  return view === "original" ? `/posts/${postId}?view=original` : `/posts/${postId}?view=translation`;
 };
 
 const hasTranslationSourceChanged = ({
@@ -485,7 +482,7 @@ const renderAuthorText = (authorId: number | null, authorName: string | null, la
     return html`${t("author", lang)} ${label}`;
   }
 
-  return html`${t("author", lang)} <a href="/?authorId=${authorId}" class="text-bold color-fg-default">${label}</a>`;
+  return html`${t("author", lang)} <a href="${postRoutes.index({ authorId })}" class="text-bold color-fg-default">${label}</a>`;
 };
 
 const renderHomeAuthorText = (authorId: number | null, authorName: string | null, lang: Lang) => {
@@ -495,7 +492,7 @@ const renderHomeAuthorText = (authorId: number | null, authorName: string | null
     return html`${label}`;
   }
 
-  return html`<a href="/?authorId=${authorId}" class="text-bold color-fg-default">${label}</a>`;
+  return html`<a href="${postRoutes.index({ authorId })}" class="text-bold color-fg-default">${label}</a>`;
 };
 
 const renderNotice = (message: string) => {
@@ -582,7 +579,7 @@ const renderPostTagLabels = (tagValue: string | null | undefined) => {
   }
 
   return html`${tags.map(
-    (tag) => html`<a href="/?tag=${encodeURIComponent(tag)}" class="mr-2 mb-1 d-inline-flex flex-items-center rounded-2 border px-2 text-mono color-fg-accent">#${tag}</a>`
+    (tag) => html`<a href="${postRoutes.index({ tag })}" class="mr-2 mb-1 d-inline-flex flex-items-center rounded-2 border px-2 text-mono color-fg-accent">#${tag}</a>`
   )}`;
 };
 
@@ -606,7 +603,7 @@ const renderLabelDirectory = (labels: Array<{ tag: string; postCount: number }>,
           (label) => html`
             <article class="Box box-shadow mb-3">
               <div class="Box-body d-flex flex-justify-between flex-items-center flex-wrap">
-                 <a href="/?tag=${encodeURIComponent(label.tag)}" class="f3 d-inline-flex flex-items-center rounded-2 border px-2 text-mono text-bold color-fg-accent">#${label.tag}</a>
+                 <a href="${postRoutes.index({ tag: label.tag })}" class="f3 d-inline-flex flex-items-center rounded-2 border px-2 text-mono text-bold color-fg-accent">#${label.tag}</a>
                 <span class="Counter f3">${label.postCount}</span>
               </div>
             </article>
@@ -638,7 +635,7 @@ const renderHomeSectionNav = (currentSection: HomeSectionNavKey, lang: Lang) => 
       }
     </style>
     <nav class="d-flex flex-wrap flex-items-center mb-4" aria-label="${t("latestPosts", lang)}">
-      ${renderHomeSectionNavLink("/", t("latestPosts", lang), currentSection === "posts")}
+      ${renderHomeSectionNavLink(postRoutes.index(), t("latestPosts", lang), currentSection === "posts")}
       <span class="home-section-separator h2 mb-2 mb-sm-0 mx-2" aria-hidden="true">|</span>
       ${renderHomeSectionNavLink("/labels", t("labels", lang), currentSection === "labels")}
       <span class="home-section-separator h2 mb-2 mb-sm-0 mx-2" aria-hidden="true">|</span>
@@ -682,7 +679,7 @@ const renderAuthorDirectory = (authors: Array<{ id: number; username: string | n
           (author) => html`
             <article class="Box box-shadow mb-3">
               <div class="Box-body d-flex flex-justify-between flex-items-center flex-wrap">
-                <a href="/?authorId=${author.id}" class="f3 text-bold color-fg-default">${author.username ?? getUnknownAuthorLabel(lang)}</a>
+                <a href="${postRoutes.index({ authorId: author.id })}" class="f3 text-bold color-fg-default">${author.username ?? getUnknownAuthorLabel(lang)}</a>
                 <span class="Counter f3">${author.post_count}</span>
               </div>
             </article>
@@ -857,7 +854,7 @@ const renderManagedPosts = (posts: PostListRow[], lang: Lang, accessUser: Access
           <div class="action-card-row">
             <div class="action-card-main">
               <h3 class="h4 mb-1">
-                <a href="/posts/${post.id}" class="text-bold color-fg-default action-card-title-link">${post.title || t("untitled", lang)}</a>
+                <a href="${postRoutes.original(post.id)}" class="text-bold color-fg-default action-card-title-link">${post.title || t("untitled", lang)}</a>
               </h3>
               <div class="f6 text-gray action-card-meta">
                 <span>${t("author", lang)} ${post.author_name ?? getUnknownAuthorLabel(lang)}</span>
@@ -869,14 +866,14 @@ const renderManagedPosts = (posts: PostListRow[], lang: Lang, accessUser: Access
             <div class="action-card-actions">
               ${canEdit
                 ? html`
-                    <a href="/post/${post.id}/edit" class="btn">${t("editAction", lang)}</a>
+                    <a href="${postRoutes.originalEdit(post.id)}" class="btn">${t("editAction", lang)}</a>
                   `
                 : html``}
               ${canDelete
                 ? html`
                     ${renderDeleteConfirmation({
                       lang,
-                      actionPath: `/admin/posts/${post.id}/delete`,
+                      actionPath: postRoutes.delete(post.id),
                       redirectTo,
                       triggerLabel: t("deletePostAction", lang)
                     })}
@@ -915,7 +912,7 @@ const renderCommentCards = (
                 <span>${formatDate(comment.timestamp, lang)}</span>
                 ${showPostLink && comment.post_id
                   ? html`
-                      <a href="/posts/${comment.post_id}" class="action-card-title-link text-bold color-fg-default">${comment.post_title || t("untitled", lang)}</a>
+                      <a href="${postRoutes.original(comment.post_id)}" class="action-card-title-link text-bold color-fg-default">${comment.post_title || t("untitled", lang)}</a>
                     `
                   : html``}
               </div>
@@ -991,6 +988,117 @@ const renderUserCards = (
   })}`;
 };
 
+type PostViewMode = "original" | "translation";
+type PostActionSurface = PostViewMode | "originalEdit" | "translationEdit";
+type PostTranslationUiState = "missing" | "unpublished" | "published";
+
+const getPostTranslationUiState = (translation: PostTranslationRow | null): PostTranslationUiState => {
+  if (!translation) {
+    return "missing";
+  }
+
+  if (translation.status === "completed" && translation.is_published === 1 && Boolean(translation.translated_body)) {
+    return "published";
+  }
+
+  return "unpublished";
+};
+
+const renderPostDeleteAction = (postId: number, lang: Lang, redirectTo: string) => {
+  return renderDeleteConfirmation({
+    lang,
+    actionPath: postRoutes.delete(postId),
+    redirectTo,
+    triggerLabel: t("deletePostAction", lang)
+  });
+};
+
+const renderGenerateTranslationAction = (postId: number, sourceLang: Lang, lang: Lang) => {
+  return html`
+    <form method="post" action="${postRoutes.translationGenerate(postId)}" class="mb-2 mr-2">
+      <input type="hidden" name="sourceLang" value="${sourceLang}" />
+      <button type="submit" class="btn">${t("translationGenerateAction", lang)}</button>
+    </form>
+  `;
+};
+
+const renderPostAdminActions = ({
+  post,
+  lang,
+  accessUser,
+  sourceLang,
+  translationState,
+  surface,
+  redirectTo
+}: {
+  post: PostDetailRow;
+  lang: Lang;
+  accessUser: AccessUser;
+  sourceLang: Lang;
+  translationState: PostTranslationUiState;
+  surface: PostActionSurface;
+  redirectTo: string;
+}) => {
+  if (!accessUser?.isAdmin) {
+    return html``;
+  }
+
+  const canEdit = canEditOwnPost(accessUser, post.author_id);
+  const deleteAction = renderPostDeleteAction(post.id, lang, redirectTo);
+
+  if (!canEdit) {
+    return html`<div class="action-card-actions">${deleteAction}</div>`;
+  }
+
+  const actions = (() => {
+    if (surface === "original") {
+      if (translationState === "missing") {
+        return html`
+          <a href="${postRoutes.originalEdit(post.id)}" class="btn mb-2 mr-2">${t("editOriginalAction", lang)}</a>
+          ${renderGenerateTranslationAction(post.id, sourceLang, lang)}
+          ${deleteAction}
+        `;
+      }
+
+      if (translationState === "unpublished") {
+        return html`
+          <a href="${postRoutes.originalEdit(post.id)}" class="btn mb-2 mr-2">${t("editOriginalAction", lang)}</a>
+          <a href="${postRoutes.translationEdit(post.id)}" class="btn mb-2 mr-2">${t("editAndPublishTranslationAction", lang)}</a>
+          ${deleteAction}
+        `;
+      }
+
+      return html`
+        <a href="${postRoutes.originalEdit(post.id)}" class="btn mb-2 mr-2">${t("editOriginalAction", lang)}</a>
+        <a href="${postRoutes.translation(post.id)}" class="btn mb-2 mr-2">${t("readTranslationAction", lang)}</a>
+        ${deleteAction}
+      `;
+    }
+
+    if (surface === "translation") {
+      return html`
+        <a href="${postRoutes.translationEdit(post.id)}" class="btn mb-2 mr-2">${t("editTranslationAction", lang)}</a>
+        <a href="${postRoutes.original(post.id)}" class="btn mb-2 mr-2">${t("readOriginalAction", lang)}</a>
+        ${deleteAction}
+      `;
+    }
+
+    if (surface === "originalEdit") {
+      return html`
+        <a href="${postRoutes.original(post.id)}" class="btn mb-2 mr-2">${t("readOriginalAction", lang)}</a>
+        ${deleteAction}
+      `;
+    }
+
+    return html`
+      <a href="${translationState === "published" ? postRoutes.translation(post.id) : postRoutes.original(post.id)}" class="btn mb-2 mr-2">${translationState === "published" ? t("readTranslationAction", lang) : t("readOriginalAction", lang)}</a>
+      ${deleteAction}
+    `;
+  })();
+
+  return html`<div class="action-card-actions">${actions}</div>`;
+};
+
 const renderPostPageBody = ({
   post,
   comments,
@@ -999,6 +1107,10 @@ const renderPostPageBody = ({
   accessUser,
   renderedTitle,
   renderedBody,
+  sourceLang,
+  translationState,
+  viewMode,
+  currentPath,
   translationNotice,
   commentError,
   commentValue
@@ -1010,6 +1122,10 @@ const renderPostPageBody = ({
   accessUser: AccessUser;
   renderedTitle: string | null;
   renderedBody: string;
+  sourceLang: Lang;
+  translationState: PostTranslationUiState;
+  viewMode: PostViewMode;
+  currentPath: string;
   translationNotice?: ReturnType<typeof html>;
   commentError?: string;
   commentValue?: string;
@@ -1030,28 +1146,15 @@ const renderPostPageBody = ({
               ${renderPrivateBadge(post.is_private, lang)}
             </div>
           </div>
-          ${accessUser?.isAdmin
-            ? html`
-                <div class="action-card-actions">
-                  ${canEditOwnPost(accessUser, post.author_id)
-                    ? html`
-                        <a href="/post/${post.id}/edit" class="btn">${t("editOriginalAction", lang)}</a>
-                        <a href="/post/${post.id}/translation" class="btn">${t("editTranslationAction", lang)}</a>
-                      `
-                    : html``}
-                  ${canDeletePost(accessUser)
-                    ? html`
-                        ${renderDeleteConfirmation({
-                          lang,
-                          actionPath: `/admin/posts/${post.id}/delete`,
-                          redirectTo: `/posts/${post.id}`,
-                          triggerLabel: t("deletePostAction", lang)
-                        })}
-                      `
-                    : html``}
-                </div>
-              `
-            : html``}
+          ${renderPostAdminActions({
+            post,
+            lang,
+            accessUser,
+            sourceLang,
+            translationState,
+            surface: viewMode,
+            redirectTo: currentPath
+          })}
         </div>
       </div>
       <div class="Box-body">
@@ -1070,7 +1173,8 @@ const renderPostPageBody = ({
       ? html`
           <div class="Box box-shadow mb-4">
             <div class="Box-body">
-              <form method="post" action="/posts/${post.id}/comments">
+              <form method="post" action="${postRoutes.comments(post.id)}">
+                <input type="hidden" name="redirectTo" value="${currentPath}" />
                 <div class="mb-3">
                   <label class="d-block text-bold mb-2" for="comment-body">${t("addComment", lang)}</label>
                   <textarea id="comment-body" name="body" class="form-control width-full" rows="5" maxlength="${MAX_COMMENT_LENGTH}" required>${commentValue || ""}</textarea>
@@ -1085,14 +1189,14 @@ const renderPostPageBody = ({
             <div class="Box-body">
               <p class="mb-2">${t("commentLoginPrompt", lang)}</p>
               <p class="mb-0">
-                <a href="/login?next=/posts/${post.id}" class="mr-3">${t("login", lang)}</a>
-                <a href="/signup?next=/posts/${post.id}">${t("signup", lang)}</a>
+                <a href="/login?next=${encodeURIComponent(currentPath)}" class="mr-3">${t("login", lang)}</a>
+                <a href="/signup?next=${encodeURIComponent(currentPath)}">${t("signup", lang)}</a>
               </p>
             </div>
           </div>
         `}
 
-    ${renderCommentCards(comments, lang, accessUser, `/posts/${post.id}`, t("noComments", lang), false)}
+    ${renderCommentCards(comments, lang, accessUser, currentPath, t("noComments", lang), false)}
   `;
 };
 
@@ -1248,6 +1352,7 @@ const renderEditPostPage = <TBindings extends Record<string, unknown>>({
   tagValue,
   bodyValue,
   selectedSourceLang,
+  translationState,
   status,
   error,
   isDraft,
@@ -1260,6 +1365,7 @@ const renderEditPostPage = <TBindings extends Record<string, unknown>>({
   tagValue: string;
   bodyValue: string;
   selectedSourceLang: Lang;
+  translationState: PostTranslationUiState;
   status?: 200 | 400 | 403;
   error?: string;
   isDraft: boolean;
@@ -1281,16 +1387,24 @@ const renderEditPostPage = <TBindings extends Record<string, unknown>>({
       body: renderPostEditorBody({
         lang,
         mode: "edit",
-        headerActions: html`<div class="d-flex flex-wrap"><a href="${buildPostViewHref(post.id, "original")}" class="btn mb-2 mr-2">${t("readOriginalAction", lang)}</a><a href="${buildPostViewHref(post.id, "translation")}" class="btn mb-2 mr-2">${t("readTranslationAction", lang)}</a><a href="/post/${post.id}/translation" class="btn mb-2">${t("editTranslationAction", lang)}</a></div>`,
+        headerActions: renderPostAdminActions({
+          post,
+          lang,
+          accessUser: getAccessUser(c),
+          sourceLang: selectedSourceLang,
+          translationState,
+          surface: "originalEdit",
+          redirectTo: postRoutes.originalEdit(post.id)
+        }),
         isDraft,
         visibility,
         titleValue,
         tagValue,
         bodyValue,
         error,
-        actionPath: `/post/${post.id}/edit`
+        actionPath: postRoutes.originalEdit(post.id)
       }),
-      activePath: "/post"
+      activePath: postRoutes.new()
     }),
     status
   );
@@ -1326,6 +1440,7 @@ const renderPostTranslationPage = <TBindings extends Record<string, unknown>>({
   const targetLang = getTranslationTargetLanguage(selectedSourceLang);
   const actionLabel = translation ? t("translationRegenerateAction", lang) : t("translationGenerateAction", lang);
   const configuredModel = options.getTranslationModel?.(c)?.trim() || DEFAULT_OPENAI_TRANSLATION_MODEL;
+  const translationState = getPostTranslationUiState(translation);
   const isPublished = translation?.is_published === 1;
   const publishStatusLabelKey = isPublished ? "translationPublishStatusPublished" : "translationPublishStatusUnpublished";
 
@@ -1345,18 +1460,22 @@ const renderPostTranslationPage = <TBindings extends Record<string, unknown>>({
             <h1 class="h2 mb-1">${t("translationManagerTitle", lang)}</h1>
             <p class="f6 text-gray mb-0">${post.title || t("untitled", lang)}</p>
           </div>
-          <div class="d-flex flex-wrap">
-            <a href="${buildPostViewHref(post.id, "original")}" class="btn mb-2 mr-2">${t("readOriginalAction", lang)}</a>
-            <a href="${buildPostViewHref(post.id, "translation")}" class="btn mb-2 mr-2">${t("readTranslationAction", lang)}</a>
-            <a href="/post/${post.id}/edit" class="btn mb-2">${t("editOriginalAction", lang)}</a>
-          </div>
+          ${renderPostAdminActions({
+            post,
+            lang,
+            accessUser: getAccessUser(c),
+            sourceLang: selectedSourceLang,
+            translationState,
+            surface: "translationEdit",
+            redirectTo: postRoutes.translationEdit(post.id)
+          })}
         </div>
         ${notice ? renderTranslationMessage(notice, "success") : html``}
         ${error ? renderTranslationMessage(error, "warn") : html``}
         <div class="Box box-shadow">
           <div class="Box-body">
             <p class="f6 text-gray mt-0 mb-3">${t("translationManagerHint", lang)}</p>
-            <form method="post" action="/post/${post.id}/translation">
+            <form method="post" action="${postRoutes.translationEdit(post.id)}">
               <div class="mb-3">
                 <label class="d-block text-bold mb-2" for="translation-source-lang">${t("postSourceLanguageLabel", lang)}</label>
                 <select id="translation-source-lang" name="sourceLang" class="form-select width-full">
@@ -1386,11 +1505,11 @@ const renderPostTranslationPage = <TBindings extends Record<string, unknown>>({
                 <input id="translated-title" name="translatedTitle" type="text" class="form-control width-full" maxlength="200" value="${translatedTitleValue}" />
               </div>
               <div class="d-flex flex-wrap mb-3">
-                <button type="submit" formaction="/post/${post.id}/translation/generate" formmethod="post" class="btn mr-2 mb-2">${actionLabel}</button>
+                <button type="submit" formaction="${postRoutes.translationGenerate(post.id)}" formmethod="post" class="btn mr-2 mb-2">${actionLabel}</button>
                 <button type="submit" name="translationAction" value="draft" class="btn mr-2 mb-2">${t("translationSaveDraftAction", lang)}</button>
                 <button type="submit" name="translationAction" value="publish" class="btn btn-primary mr-2 mb-2">${t("translationPublishAction", lang)}</button>
                 ${isPublished
-                  ? html`<button type="submit" formaction="/post/${post.id}/translation/unpublish" formmethod="post" formnovalidate class="btn mr-2 mb-2">${t("translationUnpublishAction", lang)}</button>`
+                  ? html`<button type="submit" formaction="${postRoutes.translationUnpublish(post.id)}" formmethod="post" formnovalidate class="btn mr-2 mb-2">${t("translationUnpublishAction", lang)}</button>`
                   : html``}
               </div>
               ${renderMarkdownEditor({
@@ -1407,7 +1526,7 @@ const renderPostTranslationPage = <TBindings extends Record<string, unknown>>({
         </div>
         <script src="/static/post-editor-preview.js" defer></script>
       `,
-      activePath: "/post"
+      activePath: postRoutes.new()
     }),
     status
   );
@@ -1750,7 +1869,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     return c.redirect("/");
   });
 
-  app.get("/", async (c) => {
+  const renderPostsIndexPage = async (c: Context<AppEnv<TBindings>>) => {
     const db = c.get("db");
     const isAdmin = c.get("isAdmin");
     const lang = c.get("lang");
@@ -1768,7 +1887,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     if (tag) {
       paginationParams.set("tag", tag);
     }
-    const paginationBasePath = paginationParams.size > 0 ? `/?${paginationParams.toString()}` : "/";
+    const paginationBasePath = paginationParams.size > 0 ? `${postRoutes.index()}?${paginationParams.toString()}` : postRoutes.index();
 
     const [posts, total, selectedAuthor] = await Promise.all([
       db.listPosts({ includeDrafts: isAdmin, limit: PAGE_SIZE, offset, authorId, tag, viewerId }),
@@ -1823,7 +1942,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
               html`<article class="Box box-shadow mb-3">
                 <div class="Box-body">
                   <h2 class="h3 mb-2">
-                    <a href="/posts/${post.id}" class="text-bold color-fg-default post-title-link" title="${postTitleDisplayMap.get(post.id) || post.title || t("untitled", lang)}">${postTitleDisplayMap.get(post.id) || post.title || t("untitled", lang)}</a>
+                    <a href="${postRoutes.original(post.id)}" class="text-bold color-fg-default post-title-link" title="${postTitleDisplayMap.get(post.id) || post.title || t("untitled", lang)}">${postTitleDisplayMap.get(post.id) || post.title || t("untitled", lang)}</a>
                   </h2>
                   <div class="f6 text-gray">
                     ${renderPostTagLabels(post.tag)}
@@ -1850,10 +1969,13 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         aboutPostId: c.get("aboutPostId"),
         toolsPostId: c.get("toolsPostId"),
         body,
-        activePath: "/"
+        activePath: postRoutes.index()
       })
     );
-  });
+  };
+
+  app.get("/", renderPostsIndexPage);
+  app.get(postRoutePatterns.index, renderPostsIndexPage);
 
   app.get("/labels", async (c) => {
     const db = c.get("db");
@@ -1914,7 +2036,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     );
   });
 
-  app.get("/posts/:id", async (c) => {
+  const renderPostDetailPage = (viewMode: PostViewMode) => async (c: Context<AppEnv<TBindings>>) => {
     const db = c.get("db");
     const isAdmin = c.get("isAdmin");
     const lang = c.get("lang");
@@ -1932,32 +2054,35 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     const sourceLang = post.source_lang && isLang(post.source_lang) ? post.source_lang : "zh";
-    const viewMode = c.req.query("view") === "original" ? "original" : "translation";
-    const preferredTranslation = lang !== sourceLang ? await db.getPostTranslation(postId, lang) : null;
-    const canRenderTranslation =
-      preferredTranslation?.status === "completed" &&
-      preferredTranslation.is_published === 1 &&
-      Boolean(preferredTranslation.translated_body);
-    const shouldUseTranslation = lang !== sourceLang && viewMode !== "original" && canRenderTranslation;
-    const translatedNoticeKey = preferredTranslation?.is_machine_translation === 0 ? "translatedPostEditedNotice" : "translatedPostNotice";
+    const targetLang = getTranslationTargetLanguage(sourceLang);
+    const postTranslation = await db.getPostTranslation(postId, targetLang);
+    const translationState = getPostTranslationUiState(postTranslation);
+
+    if (viewMode === "translation" && translationState !== "published") {
+      return c.notFound();
+    }
+
+    const shouldUseTranslation = viewMode === "translation" && translationState === "published";
+    const translatedNoticeKey = postTranslation?.is_machine_translation === 0 ? "translatedPostEditedNotice" : "translatedPostNotice";
     const renderedTitle = shouldUseTranslation
       ? formatTranslatedPostTitle({
-          translatedTitle: preferredTranslation?.translated_title ?? null,
+          translatedTitle: postTranslation?.translated_title ?? null,
           originalTitle: post.title
         })
       : post.title;
-    const renderedBody = shouldUseTranslation ? preferredTranslation?.translated_body ?? post.body ?? "" : post.body ?? "";
+    const renderedBody = shouldUseTranslation ? postTranslation?.translated_body ?? post.body ?? "" : post.body ?? "";
     const comments = await db.listComments(postId);
     const accessUser = getAccessUser(c);
-    const translationNotice = lang !== sourceLang && canRenderTranslation
+    const currentPath = viewMode === "translation" ? postRoutes.translation(post.id) : postRoutes.original(post.id);
+    const translationNotice = translationState === "published"
       ? html`
           <div class="flash flash-warn mb-3">
             <div class="d-flex flex-justify-between flex-items-center flex-wrap">
               <span>${t(shouldUseTranslation ? translatedNoticeKey : "originalPostNotice", lang)}</span>
               <span class="mt-2 mt-sm-0">
                 ${shouldUseTranslation
-                  ? html`<a href="${buildPostViewHref(post.id, "original")}" class="btn btn-sm">${t("readOriginalPost", lang)}</a>`
-                  : html`<a href="${buildPostViewHref(post.id, "translation")}" class="btn btn-sm">${t("readTranslatedPost", lang)}</a>`}
+                  ? html`<a href="${postRoutes.original(post.id)}" class="btn btn-sm">${t("readOriginalPost", lang)}</a>`
+                  : html`<a href="${postRoutes.translation(post.id)}" class="btn btn-sm">${t("readTranslatedPost", lang)}</a>`}
               </span>
             </div>
           </div>
@@ -1982,14 +2107,21 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           accessUser,
           renderedTitle,
           renderedBody,
+          sourceLang,
+          translationState,
+          viewMode,
+          currentPath,
           translationNotice
         }),
-        activePath: "/posts/" + post.id
+        activePath: currentPath
       })
     );
-  });
+  };
 
-  app.post("/posts/:id/comments", async (c) => {
+  app.get(postRoutePatterns.original, renderPostDetailPage("original"));
+  app.get(postRoutePatterns.translation, renderPostDetailPage("translation"));
+
+  app.post(postRoutePatterns.comments, async (c) => {
     const accessUser = getAccessUser(c);
     if (!hasAccess(accessUser, "user")) {
       return redirectToLogin(c);
@@ -2013,6 +2145,10 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
 
     const body = (await c.req.parseBody()) as FormBody;
     const commentValue = getTrimmedFormValue(body, "body");
+    const redirectTo = sanitizeNextPath(getTrimmedFormValue(body, "redirectTo"), postRoutes.original(postId));
+    const sourceLang = post.source_lang && isLang(post.source_lang) ? post.source_lang : "zh";
+    const postTranslation = await db.getPostTranslation(postId, getTranslationTargetLanguage(sourceLang));
+    const translationState = getPostTranslationUiState(postTranslation);
 
     if (!commentValue) {
       const comments = await db.listComments(postId);
@@ -2034,10 +2170,14 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
             accessUser,
             renderedTitle: post.title,
             renderedBody: post.body ?? "",
+            sourceLang,
+            translationState,
+            viewMode: "original",
+            currentPath: postRoutes.original(post.id),
             commentError: t("commentRequired", lang),
             commentValue
           }),
-          activePath: "/posts/" + post.id
+          activePath: postRoutes.original(post.id)
         }),
         400
       );
@@ -2052,7 +2192,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       timestamp: new Date().toISOString()
     });
 
-    return c.redirect(`/posts/${postId}`);
+    return c.redirect(redirectTo);
   });
 
   app.post("/comments/:id/delete", async (c) => {
@@ -2095,7 +2235,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     await db.deleteComment(commentId);
 
     const body = (await c.req.parseBody()) as FormBody;
-    const redirectTo = sanitizeNextPath(getTrimmedFormValue(body, "redirectTo"), comment.post_id ? `/posts/${comment.post_id}` : "/account");
+    const redirectTo = sanitizeNextPath(getTrimmedFormValue(body, "redirectTo"), comment.post_id ? postRoutes.original(comment.post_id) : "/account");
     return c.redirect(redirectTo);
   });
 
@@ -2159,10 +2299,10 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     );
   });
 
-  app.get("/post", (c) => {
+  app.get(postRoutePatterns.new, (c) => {
     const accessUser = getAccessUser(c);
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, "/post");
+      return redirectToLogin(c, postRoutes.new());
     }
 
     const site = options.getSite(c);
@@ -2179,13 +2319,13 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         lang,
         aboutPostId: c.get("aboutPostId"),
         toolsPostId: c.get("toolsPostId"),
-        body: renderPostEditorBody({ lang, mode: "create", isDraft: false, visibility: "public", actionPath: "/post" }),
-        activePath: "/post"
+        body: renderPostEditorBody({ lang, mode: "create", isDraft: false, visibility: "public", actionPath: postRoutes.create() }),
+        activePath: postRoutes.new()
       })
     );
   });
 
-  app.post("/post", async (c) => {
+  app.post(postRoutePatterns.create, async (c) => {
     const accessUser = getAccessUser(c);
     if (!hasAccess(accessUser, "admin")) {
       return redirectToLogin(c);
@@ -2224,9 +2364,9 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
             tagValue,
             bodyValue: postBodyValue,
             error: error ?? t("postBodyRequired", lang),
-            actionPath: "/post"
+            actionPath: postRoutes.create()
           }),
-          activePath: "/post"
+          activePath: postRoutes.new()
         }),
         400
       );
@@ -2243,10 +2383,10 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       isPrivate: visibility === "private"
     });
 
-    return c.redirect(`/post/${newPostId}/translation`);
+    return c.redirect(postRoutes.original(newPostId));
   });
 
-  app.get("/post/:id/edit", async (c) => {
+  app.get(postRoutePatterns.originalEdit, async (c) => {
     const accessUser = getAccessUser(c);
     const postId = Number(c.req.param("id"));
     if (Number.isNaN(postId)) {
@@ -2254,7 +2394,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, `/post/${postId}/edit`);
+      return redirectToLogin(c, postRoutes.originalEdit(postId));
     }
 
     const db = c.get("db");
@@ -2277,7 +2417,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           aboutPostId: c.get("aboutPostId"),
           toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
-          activePath: "/post"
+          activePath: postRoutes.new()
         }),
         403
       );
@@ -2286,6 +2426,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const lang = c.get("lang");
     const detectedSourceLang = detectPostSourceLanguage(post.title ?? "", post.body ?? "");
     const selectedSourceLang = getStoredSourceLanguage(post.source_lang, lang);
+    const translation = await db.getPostTranslation(post.id, getTranslationTargetLanguage(selectedSourceLang));
 
     return renderEditPostPage({
       c,
@@ -2295,12 +2436,13 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       tagValue: tagInputValue(post.tag),
       bodyValue: post.body ?? "",
       selectedSourceLang,
+      translationState: getPostTranslationUiState(translation),
       isDraft: isDraftTag(post.tag),
       visibility: post.is_private ? "private" : "public"
     });
   });
 
-  app.post("/post/:id/edit", async (c) => {
+  app.post(postRoutePatterns.originalEdit, async (c) => {
     const accessUser = getAccessUser(c);
     const postId = Number(c.req.param("id"));
     if (Number.isNaN(postId)) {
@@ -2331,7 +2473,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           aboutPostId: c.get("aboutPostId"),
           toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
-          activePath: "/post"
+          activePath: postRoutes.new()
         }),
         403
       );
@@ -2358,6 +2500,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         tagValue,
         bodyValue: postBodyValue,
         selectedSourceLang: sourceLang,
+        translationState: getPostTranslationUiState(await db.getPostTranslation(post.id, getTranslationTargetLanguage(sourceLang))),
         error,
         isDraft: draft,
         visibility,
@@ -2390,10 +2533,10 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       sourceLang
     });
 
-    return c.redirect(translationSourceChanged ? `/post/${postId}/translation` : `/posts/${postId}`);
+    return c.redirect(translationSourceChanged ? postRoutes.translationEdit(postId) : postRoutes.original(postId));
   });
 
-  app.get("/post/:id/translation", async (c) => {
+  app.get(postRoutePatterns.translationEdit, async (c) => {
     const accessUser = getAccessUser(c);
     const postId = Number(c.req.param("id"));
     if (Number.isNaN(postId)) {
@@ -2401,7 +2544,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, `/post/${postId}/translation`);
+      return redirectToLogin(c, postRoutes.translationEdit(postId));
     }
 
     const db = c.get("db");
@@ -2424,7 +2567,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           aboutPostId: c.get("aboutPostId"),
           toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
-          activePath: "/post"
+          activePath: postRoutes.new()
         }),
         403
       );
@@ -2434,6 +2577,10 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const detectedSourceLang = detectPostSourceLanguage(post.title ?? "", post.body ?? "");
     const selectedSourceLang = getStoredSourceLanguage(post.source_lang, lang);
     let translation = await db.getPostTranslation(post.id, getTranslationTargetLanguage(selectedSourceLang));
+
+    if (!translation) {
+      return c.notFound();
+    }
 
     // Auto-recover stuck translations: if status is pending/processing, re-enqueue the job.
     // This handles dev server restarts, lost in-flight jobs, and provider hangs.
@@ -2466,7 +2613,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     });
   });
 
-  app.post("/post/:id/translation/generate", async (c) => {
+  app.post(postRoutePatterns.translationGenerate, async (c) => {
     const accessUser = getAccessUser(c);
     const postId = Number(c.req.param("id"));
     if (Number.isNaN(postId)) {
@@ -2474,7 +2621,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, `/post/${postId}/translation`);
+      return redirectToLogin(c, postRoutes.translationEdit(postId));
     }
 
     const db = c.get("db");
@@ -2497,7 +2644,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           aboutPostId: c.get("aboutPostId"),
           toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
-          activePath: "/post"
+          activePath: postRoutes.new()
         }),
         403
       );
@@ -2548,10 +2695,10 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       options
     });
 
-    return c.redirect(`/post/${postId}/translation?translation=${queuedCount > 0 ? "queued" : "ready"}`);
+    return c.redirect(`${postRoutes.translationEdit(postId)}?translation=${queuedCount > 0 ? "queued" : "ready"}`);
   });
 
-  app.post("/post/:id/translation", async (c) => {
+  app.post(postRoutePatterns.translationEdit, async (c) => {
     const accessUser = getAccessUser(c);
     const postId = Number(c.req.param("id"));
     if (Number.isNaN(postId)) {
@@ -2559,7 +2706,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, `/post/${postId}/translation`);
+      return redirectToLogin(c, postRoutes.translationEdit(postId));
     }
 
     const db = c.get("db");
@@ -2582,7 +2729,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           aboutPostId: c.get("aboutPostId"),
           toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
-          activePath: "/post"
+          activePath: postRoutes.new()
         }),
         403
       );
@@ -2595,6 +2742,11 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const sourceLang = getSourceLanguageValue(body, detectedSourceLang, currentSourceLang);
     const targetLang = getTranslationTargetLanguage(sourceLang);
     const existingTranslation = await db.getPostTranslation(postId, targetLang);
+
+    if (!existingTranslation) {
+      return c.notFound();
+    }
+
     const translationAction = getTrimmedFormValue(body, "translationAction") === "draft" ? "draft" : "publish";
     const translatedTitle = getTrimmedFormValue(body, "translatedTitle") || null;
     const translatedBody = getRawFormValue(body, "translatedBody").trim();
@@ -2650,12 +2802,12 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     });
 
     if (translationAction === "publish") {
-      return c.redirect(`/posts/${postId}`);
+      return c.redirect(postRoutes.translation(postId));
     }
-    return c.redirect(`/post/${postId}/translation?translation=draft`);
+    return c.redirect(`${postRoutes.translationEdit(postId)}?translation=draft`);
   });
 
-  app.post("/post/:id/translation/delete", async (c) => {
+  app.post(postRoutePatterns.translationDelete, async (c) => {
     const accessUser = getAccessUser(c);
     const postId = Number(c.req.param("id"));
     if (Number.isNaN(postId)) {
@@ -2663,7 +2815,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, `/post/${postId}/translation`);
+      return redirectToLogin(c, postRoutes.translationEdit(postId));
     }
 
     const db = c.get("db");
@@ -2686,7 +2838,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           aboutPostId: c.get("aboutPostId"),
           toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
-          activePath: "/post"
+          activePath: postRoutes.new()
         }),
         403
       );
@@ -2697,10 +2849,10 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const targetLang = getTranslationTargetLanguage(selectedSourceLang);
     await db.deletePostTranslation(postId, targetLang);
 
-    return c.redirect(`/post/${postId}/translation?translation=deleted`);
+    return c.redirect(postRoutes.original(postId));
   });
 
-  app.post("/post/:id/translation/unpublish", async (c) => {
+  app.post(postRoutePatterns.translationUnpublish, async (c) => {
     const accessUser = getAccessUser(c);
     const postId = Number(c.req.param("id"));
     if (Number.isNaN(postId)) {
@@ -2708,7 +2860,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, `/post/${postId}/translation`);
+      return redirectToLogin(c, postRoutes.translationEdit(postId));
     }
 
     const db = c.get("db");
@@ -2731,7 +2883,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           aboutPostId: c.get("aboutPostId"),
           toolsPostId: c.get("toolsPostId"),
           body: renderNotice(t("notAuthorized", lang)),
-          activePath: "/post"
+          activePath: postRoutes.new()
         }),
         403
       );
@@ -2762,7 +2914,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       });
     }
 
-    return c.redirect(`/post/${postId}/translation?translation=unpublished`);
+    return c.redirect(`${postRoutes.translationEdit(postId)}?translation=unpublished`);
   });
 
   app.get("/admin", async (c) => {
@@ -2843,7 +2995,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     );
   });
 
-  app.post("/admin/posts/:id/delete", async (c) => {
+  app.post(postRoutePatterns.delete, async (c) => {
     const accessUser = getAccessUser(c);
     if (!hasAccess(accessUser, "admin")) {
       return redirectToLogin(c);
@@ -2859,7 +3011,13 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
 
     const body = (await c.req.parseBody()) as FormBody;
     const redirectTo = sanitizeNextPath(getTrimmedFormValue(body, "redirectTo"), "/admin");
-    return c.redirect(redirectTo === `/posts/${postId}` ? "/admin" : redirectTo);
+    const deletedPostPaths = new Set([
+      postRoutes.original(postId),
+      postRoutes.translation(postId),
+      postRoutes.originalEdit(postId),
+      postRoutes.translationEdit(postId)
+    ]);
+    return c.redirect(deletedPostPaths.has(redirectTo) ? "/admin" : redirectTo);
   });
 
   app.post("/admin/users/:id/block", async (c) => {

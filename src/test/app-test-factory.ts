@@ -135,7 +135,7 @@ export const createAppTestContext = () => {
     siteName: "Test Blog",
     siteDescription: "Test Description",
     navLinks: [
-      { label: "Post", href: "/post", requiresAdmin: true },
+      { label: "Post", href: "/posts/new", requiresAdmin: true },
       { label: "Admin", href: "/admin", requiresAdmin: true }
     ]
   };

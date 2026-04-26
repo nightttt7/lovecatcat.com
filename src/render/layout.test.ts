@@ -8,7 +8,7 @@ describe("renderLayout", () => {
     siteName: "Test Blog",
     siteDescription: "Test Description",
     navLinks: [
-      { label: "Post", labelKey: "newPost", href: "/post", requiresAdmin: true },
+      { label: "Post", labelKey: "newPost", href: "/posts/new", requiresAdmin: true },
       { label: "Admin", labelKey: "adminDashboard", href: "/admin", requiresAdmin: true }
     ]
   };
@@ -87,8 +87,8 @@ describe("renderLayout", () => {
     });
 
     const html = result.toString();
-    expect(html).toMatch(/href=\/posts\/9[\s\S]*>About<\/a/);
-    expect(html).toMatch(/href=\/posts\/10[\s\S]*>Tools<\/a/);
+    expect(html).toMatch(/href=\/posts\/9\/original[\s\S]*>About<\/a/);
+    expect(html).toMatch(/href=\/posts\/10\/original[\s\S]*>Tools<\/a/);
     expect(html).toContain('aria-label="Open menu"');
     expect(html).toContain("New post");
     expect(html).toContain("Admin dashboard");
@@ -106,7 +106,7 @@ describe("renderLayout", () => {
     });
 
     const html = result.toString();
-    expectHtmlFragmentsInOrder(html, ['href=/posts/9', 'href=/posts/10']);
+    expectHtmlFragmentsInOrder(html, ['href=/posts/9/original', 'href=/posts/10/original']);
   });
 
   it("localizes tools link in Chinese by default", () => {
@@ -167,7 +167,7 @@ describe("renderLayout", () => {
       site: mockSiteConfig,
       isAdmin: true,
       body: "Body",
-      activePath: "/post"
+      activePath: "/posts/new"
     });
 
     const html = result.toString();

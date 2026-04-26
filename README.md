@@ -122,7 +122,7 @@ The async translation flow is:
 
 ## Available Routes
 
-The main routes currently include the home page `/`, post details `/posts/:id`, comment submission `/posts/:id/comments`, authentication `/login` `/signup` `/logout`, the account page `/account`, admin post creation and editing `/post` `/post/:id/edit`, the admin dashboard `/admin`, user management `/admin/users/:id/block` `/unblock` `/delete`, and language switching via `/api/lang`.
+The main routes currently include the home page `/` and post index `/posts`, post original pages `/posts/:id/original`, published translation pages `/posts/:id/translation`, comment submission `/posts/:id/comments`, authentication `/login` `/signup` `/logout`, the account page `/account`, admin post creation and editing `/posts/new` `/posts/:id/original/edit` `/posts/:id/translation/edit`, the admin dashboard `/admin`, user management `/admin/users/:id/block` `/unblock` `/delete`, and language switching via `/api/lang`.
 
 ## Getting Started
 

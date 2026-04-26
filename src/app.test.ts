@@ -102,7 +102,7 @@ describe("createApp", () => {
       
       const html = await res.text();
       expect(html).toContain("所有博文");
-      expectHtmlFragmentsInOrder(html, ['href="/"', '>所有博文<', 'href="/labels"', '>标签<', 'href="/authors"', '>作者<']);
+      expectHtmlFragmentsInOrder(html, ['href="/posts"', '>所有博文<', 'href="/labels"', '>标签<', 'href="/authors"', '>作者<']);
       expect(html).toContain("暂无博文内容");
     });
 
@@ -125,7 +125,7 @@ describe("createApp", () => {
       expect(res.status).toBe(200);
 
       const html = await res.text();
-  expectHtmlFragmentsInOrder(html, ['href=/posts/21', 'href=/posts/22']);
+  expectHtmlFragmentsInOrder(html, ['href=/posts/21/original', 'href=/posts/22/original']);
       expect(html).toContain(">关于<");
       expect(html).toContain(">工具<");
       expect(html).not.toMatch(/<header>[\s\S]*href=\/labels/);
@@ -222,8 +222,8 @@ describe("createApp", () => {
       expect(html).toContain("#news");
       expect(html).toContain("#updates");
       expect(html).not.toContain("#draft");
-      expect(html).toContain('href="/?tag=news"');
-      expect(html).toContain('href="/?tag=updates"');
+      expect(html).toContain('href="/posts?tag=news"');
+      expect(html).toContain('href="/posts?tag=updates"');
     });
 
     it("renders homepage meta as tags first, author name, and @ date", async () => {
@@ -302,7 +302,7 @@ describe("createApp", () => {
       expect(res.status).toBe(200);
 
       const html = await res.text();
-      expect(html).toContain('href="/?authorId=7"');
+      expect(html).toContain('href="/posts?authorId=7"');
       expect(html).toContain(">Author</a>");
     });
 
@@ -332,7 +332,7 @@ describe("createApp", () => {
         : null);
 
       const app = createApp(mockOptions);
-      const res = await app.request("/?authorId=7");
+      const res = await app.request("/posts?authorId=7");
 
       expect(res.status).toBe(200);
       expect(listOptions).toMatchObject({ authorId: 7, includeDrafts: false, limit: 10, offset: 0 });
@@ -340,7 +340,7 @@ describe("createApp", () => {
 
       const html = await res.text();
       expect(html).toContain(">作者: Author<");
-      expect(html).toContain("/?authorId=7&amp;page=2");
+      expect(html).toContain("/posts?authorId=7&amp;page=2");
     });
 
     it("filters posts by tag and preserves spaced label filters in pagination links", async () => {
@@ -366,7 +366,7 @@ describe("createApp", () => {
       };
 
       const app = createApp(mockOptions);
-      const res = await app.request("/?tag=Markdown%20Test");
+      const res = await app.request("/posts?tag=Markdown%20Test");
 
       expect(res.status).toBe(200);
       expect(listOptions).toMatchObject({ tag: "markdown test", includeDrafts: false, limit: 10, offset: 0 });
@@ -374,7 +374,7 @@ describe("createApp", () => {
 
       const html = await res.text();
       expect(html).toContain(">#markdown test<");
-      expect(html).toContain("/?tag=markdown+test&amp;page=2");
+      expect(html).toContain("/posts?tag=markdown+test&amp;page=2");
     });
 
     it("shows draft badge for draft posts when admin", async () => {
@@ -547,12 +547,12 @@ describe("createApp", () => {
         'data-pagination-minimal',
         'data-pagination-measure-full',
         'data-pagination-measure-compact',
-        'href="/?page=1"',
-        'href="/?page=4"',
-        'href="/?page=5"',
-        'href="/?page=7"',
-        'href="/?page=8"',
-        'href="/?page=10"',
+        'href="/posts?page=1"',
+        'href="/posts?page=4"',
+        'href="/posts?page=5"',
+        'href="/posts?page=7"',
+        'href="/posts?page=8"',
+        'href="/posts?page=10"',
         '>...<'
       ]);
     });
@@ -572,9 +572,9 @@ describe("createApp", () => {
 
       expectResponsivePaginationMarkup(html, ['data-pagination-minimal']);
       expect(minimalPaginationHtml).toContain('>...<');
-      expect(minimalPaginationHtml).toContain('href="/?page=5"');
+      expect(minimalPaginationHtml).toContain('href="/posts?page=5"');
       expect(minimalPaginationHtml).toContain('aria-current="page">6</span>');
-      expect(minimalPaginationHtml).toContain('href="/?page=7"');
+      expect(minimalPaginationHtml).toContain('href="/posts?page=7"');
     });
 
     it("renders a trailing ellipsis in the minimal pagination variant on the first page", async () => {
@@ -591,9 +591,9 @@ describe("createApp", () => {
       const minimalPaginationHtml = minimalPaginationMatch?.[0] ?? "";
 
       expect(minimalPaginationHtml).toContain('aria-current="page">1</span>');
-      expect(minimalPaginationHtml).toContain('href="/?page=2"');
+      expect(minimalPaginationHtml).toContain('href="/posts?page=2"');
       expect(minimalPaginationHtml).toContain('>...<');
-      expect(minimalPaginationHtml).not.toContain('href="/?page=3"');
+      expect(minimalPaginationHtml).not.toContain('href="/posts?page=3"');
     });
 
     it("does not show pagination for single page", async () => {
@@ -620,11 +620,11 @@ describe("createApp", () => {
       expect(res.status).toBe(200);
 
       const html = await res.text();
-      expectHtmlFragmentsInOrder(html, ['href="/"', '>所有博文<', 'href="/labels"', '>标签<', 'href="/authors"', '>作者<']);
+      expectHtmlFragmentsInOrder(html, ['href="/posts"', '>所有博文<', 'href="/labels"', '>标签<', 'href="/authors"', '>作者<']);
       expect(html).toContain("全部标签");
-      expect(html).toContain('href="/?tag=news"');
-      expect(html).toContain('href="/?tag=updates"');
-      expect(html).toContain('href="/?tag=guide"');
+      expect(html).toContain('href="/posts?tag=news"');
+      expect(html).toContain('href="/posts?tag=updates"');
+      expect(html).toContain('href="/posts?tag=guide"');
       expect(html).toContain('class="Counter f3">2<');
       expect(html).not.toContain("#draft");
     });
@@ -643,19 +643,19 @@ describe("createApp", () => {
       expect(res.status).toBe(200);
 
       const html = await res.text();
-      expectHtmlFragmentsInOrder(html, ['href="/"', '>所有博文<', 'href="/labels"', '>标签<', 'href="/authors"', '>作者<']);
+      expectHtmlFragmentsInOrder(html, ['href="/posts"', '>所有博文<', 'href="/labels"', '>标签<', 'href="/authors"', '>作者<']);
       expect(html).toContain("全部作者");
-      expect(html).toContain('href="/?authorId=7"');
-      expect(html).toContain('href="/?authorId=8"');
+      expect(html).toContain('href="/posts?authorId=7"');
+      expect(html).toContain('href="/posts?authorId=8"');
       expect(html).toContain(">lian</a>");
       expect(html).toContain('class="Counter f3">3<');
     });
   });
 
-  describe("GET /posts/:id", () => {
+  describe("GET /posts/:id/original", () => {
     it("returns not found page for invalid post ID", async () => {
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/abc");
+      const res = await app.request("/posts/abc/original");
 
       expect(res.status).toBe(404);
       const html = await res.text();
@@ -666,7 +666,7 @@ describe("createApp", () => {
       mockDb.getPostById = async () => null;
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/999");
+      const res = await app.request("/posts/999/original");
 
       expect(res.status).toBe(404);
       const html = await res.text();
@@ -689,11 +689,11 @@ describe("createApp", () => {
       mockDb.getPostById = async (_id, options) => (options.viewerId === 5 ? privatePost : null);
       mockDb.listComments = async () => [];
 
-      const anonymousRes = await request("/posts/1");
+      const anonymousRes = await request("/posts/1/original");
       expect(anonymousRes.status).toBe(404);
 
       setSignedInUser({ id: 5 });
-      const ownerRes = await request("/posts/1", undefined, true);
+      const ownerRes = await request("/posts/1/original", undefined, true);
 
       expect(ownerRes.status).toBe(200);
       const html = await ownerRes.text();
@@ -718,7 +718,7 @@ describe("createApp", () => {
       mockDb.listComments = async () => [];
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/1");
+      const res = await app.request("/posts/1/original");
       
       expect(res.status).toBe(200);
       
@@ -746,13 +746,13 @@ describe("createApp", () => {
       mockDb.listComments = async () => [];
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/1");
+      const res = await app.request("/posts/1/original");
 
       expect(res.status).toBe(200);
 
       const html = await res.text();
-      expect(html).toContain('href="/?tag=news"');
-      expect(html).toContain('href="/?authorId=7"');
+      expect(html).toContain('href="/posts?tag=news"');
+      expect(html).toContain('href="/posts?authorId=7"');
       expect(html).toContain(">lian</a>");
       expect(html).toContain("@ 2024年6月25日");
       expect(html).not.toContain("Published 2024年6月25日");
@@ -789,7 +789,7 @@ describe("createApp", () => {
       mockDb.listComments = async () => mockComments;
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/1");
+      const res = await app.request("/posts/1/original");
       
       expect(res.status).toBe(200);
       
@@ -819,7 +819,7 @@ describe("createApp", () => {
       mockDb.listComments = async () => [];
       setSignedInUser();
 
-      const res = await request("/posts/1", undefined, true);
+      const res = await request("/posts/1/original", undefined, true);
 
       expect(res.status).toBe(200);
 
@@ -853,7 +853,7 @@ describe("createApp", () => {
 
       setSignedInAdmin();
 
-      const res = await request("/posts/1", undefined, true);
+      const res = await request("/posts/1/original", undefined, true);
 
       expect(res.status).toBe(200);
 
@@ -862,7 +862,7 @@ describe("createApp", () => {
       expect(html).toContain("action-card-main");
       expect(html).toContain("action-card-actions");
       expect(html).toContain("action-card-title-link");
-      expectDeleteConfirmationPanel(html, { actionPath: "/admin/posts/1/delete" });
+      expectDeleteConfirmationPanel(html, { actionPath: "/posts/1/delete" });
       expectDeleteConfirmationPanel(html, { actionPath: "/comments/1/delete" });
     });
 
@@ -882,7 +882,7 @@ describe("createApp", () => {
       mockDb.listComments = async () => [];
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/1");
+      const res = await app.request("/posts/1/original");
       
       expect(res.status).toBe(200);
       
@@ -908,7 +908,7 @@ describe("createApp", () => {
       mockOptions.getIsAdmin = () => true;
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/1");
+      const res = await app.request("/posts/1/original");
       
       expect(res.status).toBe(200);
       
@@ -933,7 +933,7 @@ describe("createApp", () => {
       mockOptions.getIsAdmin = () => false;
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/1");
+      const res = await app.request("/posts/1/original");
 
       expect(res.status).toBe(404);
       const html = await res.text();
@@ -956,7 +956,7 @@ describe("createApp", () => {
       mockDb.listComments = async () => [];
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/1");
+      const res = await app.request("/posts/1/original");
       
       expect(res.status).toBe(200);
       
@@ -980,7 +980,7 @@ describe("createApp", () => {
       mockDb.listComments = async () => [];
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/1");
+      const res = await app.request("/posts/1/original");
       
       expect(res.status).toBe(200);
       
@@ -1013,7 +1013,7 @@ describe("createApp", () => {
       mockDb.listComments = async () => mockComments;
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/1");
+      const res = await app.request("/posts/1/original");
       
       expect(res.status).toBe(200);
       
@@ -1038,7 +1038,7 @@ describe("createApp", () => {
       mockDb.listComments = async () => [];
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/1");
+      const res = await app.request("/posts/1/original");
       
       expect(res.status).toBe(200);
       
@@ -1062,7 +1062,7 @@ describe("createApp", () => {
       mockDb.listComments = async () => [];
 
       const app = createApp(mockOptions);
-      const res = await app.request("/posts/1");
+      const res = await app.request("/posts/1/original");
       
       expect(res.status).toBe(200);
       
@@ -1144,7 +1144,7 @@ describe("createApp", () => {
       mockOptions.getIsAdmin = () => true;
 
       const app = createApp(mockOptions);
-      await app.request("/posts/1");
+      await app.request("/posts/1/original");
       
       expect(capturedOptions).toBeDefined();
       expect(capturedOptions.includeDrafts).toBe(true);
@@ -1159,7 +1159,7 @@ describe("createApp", () => {
       mockOptions.getIsAdmin = () => false;
 
       const app = createApp(mockOptions);
-      await app.request("/posts/1");
+      await app.request("/posts/1/original");
       
       expect(capturedOptions).toBeDefined();
       expect(capturedOptions.includeDrafts).toBe(false);
