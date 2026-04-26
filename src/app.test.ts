@@ -19,6 +19,7 @@ describe("createApp", () => {
   let request: ReturnType<typeof createAppTestContext>["request"];
   let createComment: ReturnType<typeof createAppTestContext>["createComment"];
   let createPostDetail: ReturnType<typeof createAppTestContext>["createPostDetail"];
+  let createPostTranslation: ReturnType<typeof createAppTestContext>["createPostTranslation"];
   let setSignedInUser: ReturnType<typeof createAppTestContext>["setSignedInUser"];
   let setSignedInAdmin: ReturnType<typeof createAppTestContext>["setSignedInAdmin"];
 
@@ -30,6 +31,7 @@ describe("createApp", () => {
     request = context.request;
     createComment = context.createComment;
     createPostDetail = context.createPostDetail;
+    createPostTranslation = context.createPostTranslation;
     setSignedInUser = context.setSignedInUser;
     setSignedInAdmin = context.setSignedInAdmin;
   });
@@ -280,6 +282,42 @@ describe("createApp", () => {
       expect(html).toContain("All posts");
       expect(html).toContain("@ 2024-06-25");
       expect(html).not.toContain("2024年6月25日");
+    });
+
+    it("uses the original title when a completed translation is unpublished", async () => {
+      mockDb.listPosts = async () => [
+        {
+          id: 1,
+          title: "Original title",
+          timestamp: "2024-06-25 10:00:00",
+          tag: "news",
+          author_id: 7,
+          author_name: "lian",
+          source_lang: "zh",
+          is_draft: 0
+        }
+      ];
+      mockDb.countPosts = async () => 1;
+      mockDb.getPostTranslation = async () => createPostTranslation({
+        post_id: 1,
+        lang: "en",
+        translated_title: "Unpublished translated title",
+        translated_body: "Unpublished translated body",
+        status: "completed",
+        is_published: 0
+      });
+
+      const res = await request("/", {
+        headers: {
+          cookie: "lang=en"
+        }
+      });
+
+      expect(res.status).toBe(200);
+
+      const html = await res.text();
+      expect(html).toContain("Original title");
+      expect(html).not.toContain("Unpublished translated title");
     });
 
     it("renders author names as links on the home page", async () => {

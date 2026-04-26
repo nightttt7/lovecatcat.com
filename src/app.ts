@@ -1926,7 +1926,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         }
 
         const translation = await db.getPostTranslation(post.id, lang);
-        if (translation?.status === "completed" && translation.translated_title) {
+        if (getPostTranslationUiState(translation) === "published" && translation?.translated_title) {
           return { postId: post.id, title: translation.translated_title };
         }
 
