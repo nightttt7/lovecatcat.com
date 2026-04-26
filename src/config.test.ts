@@ -13,7 +13,7 @@ describe("getSiteConfig", () => {
     const config = getSiteConfig();
     
     expect(config.navLinks).toHaveLength(2);
-    expect(config.navLinks[0]).toEqual({ label: "Post", labelKey: "newPost", href: "/post", requiresAdmin: true });
+    expect(config.navLinks[0]).toEqual({ label: "Post", labelKey: "newPost", href: "/posts/new", requiresAdmin: true });
     expect(config.navLinks[1]).toEqual({ label: "Admin", labelKey: "adminDashboard", href: "/admin", requiresAdmin: true });
   });
 });

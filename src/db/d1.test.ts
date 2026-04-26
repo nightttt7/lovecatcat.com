@@ -100,7 +100,7 @@ class MockD1Database {
       return { results: this.postColumns };
     }
 
-    if (sql.includes("SELECT id, title, body, timestamp, author_id, tag FROM posts ORDER BY id")) {
+    if (sql.includes("SELECT id, title, body, timestamp, author_id, tag") && sql.includes("FROM posts ORDER BY id")) {
       return { results: this.existingPostsResults as T[] };
     }
 
@@ -238,14 +238,15 @@ describe("createD1Db", () => {
     expect(rawDb.findCall("run", "ALTER TABLE comments ADD COLUMN user_id INTEGER")).toBeDefined();
     expect(rawDb.findCall("run", "ALTER TABLE posts RENAME TO posts__legacy")).toBeDefined();
     expect(rawDb.findCall("run", "CREATE TABLE posts (")).toBeDefined();
-    expect(rawDb.findCall("run", "INSERT INTO posts (id, title, body, timestamp, author_id, tag, is_private)")?.args).toEqual([
+    expect(rawDb.findCall("run", "INSERT INTO posts (id, title, body, timestamp, author_id, tag, is_private, source_lang)")?.args).toEqual([
       1,
       "Legacy",
       "Body",
       "2024-01-01T00:00:00.000Z",
       1,
       "markdown test",
-      0
+      0,
+      "zh"
     ]);
     expect(rawDb.findCall("run", "CREATE TABLE IF NOT EXISTS sessions")).toBeDefined();
     expect(rawDb.execCalls).toHaveLength(0);
@@ -475,6 +476,7 @@ describe("createD1Db", () => {
         body: "Body",
         timestamp: "2024-01-01T00:00:00.000Z",
         authorId: 1,
+        sourceLang: "zh",
         tag: "news",
         isPrivate: true
       })
@@ -483,7 +485,7 @@ describe("createD1Db", () => {
     await blogDb.deleteComment(1);
     await blogDb.updateUserBlocked(1, true);
     await blogDb.deleteUser(1);
-    await blogDb.updatePost({ id: 31, title: "Updated", body: "Body", tag: "updated", isPrivate: false });
+    await blogDb.updatePost({ id: 31, title: "Updated", body: "Body", sourceLang: "en", tag: "updated", isPrivate: false });
     await blogDb.deletePost(31);
     await blogDb.createSession({
       userId: 1,
@@ -510,9 +512,10 @@ describe("createD1Db", () => {
       "2024-01-01T00:00:00.000Z",
       1,
       "news",
-      1
+      1,
+      "zh"
     ]);
-    expect(rawDb.findCall("run", "SET title = ?, body = ?, tag = ?, is_private = ?")?.args).toEqual(["Updated", "Body", "updated", 0, 31]);
+    expect(rawDb.findCall("run", "SET title = ?, body = ?, tag = ?, is_private = ?, source_lang = ?")?.args).toEqual(["Updated", "Body", "updated", 0, "en", 31]);
     expect(rawDb.findCall("run", "INSERT INTO sessions")?.args).toEqual([
       1,
       "session-hash",

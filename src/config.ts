@@ -1,4 +1,5 @@
 import type { TranslationKey } from "./utils/i18n";
+import { postRoutes } from "./utils/routes";
 
 export type NavLink = {
   label: string;
@@ -18,7 +19,7 @@ export const getSiteConfig = (): SiteConfig => {
     siteName: "LoveCatCat",
     siteDescription: "Hono full-stack blog",
     navLinks: [
-      { label: "Post", labelKey: "newPost", href: "/post", requiresAdmin: true },
+      { label: "Post", labelKey: "newPost", href: postRoutes.new(), requiresAdmin: true },
       { label: "Admin", labelKey: "adminDashboard", href: "/admin", requiresAdmin: true }
     ]
   };

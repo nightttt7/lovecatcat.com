@@ -45,6 +45,15 @@ describe("auth utilities", () => {
     await expect(verifyPassword("password", "pbkdf2:sha256:260000$salt")).resolves.toBe(false);
   });
 
+  it("returns false when the stored hash and computed hash have different lengths", async () => {
+    // Truncate the stored hash so constantTimeEqual hits the length-mismatch branch.
+    const fullHash = await hashPassword("sample password");
+    const [method, salt, hash] = fullHash.split("$");
+    const truncated = `${method}$${salt}$${hash.slice(0, 10)}`;
+
+    await expect(verifyPassword("sample password", truncated)).resolves.toBe(false);
+  });
+
   it("creates and hashes session tokens", async () => {
     const sessionToken = createSessionToken();
     const hashedToken = await hashSessionToken(sessionToken);

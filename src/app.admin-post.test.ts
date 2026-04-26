@@ -14,6 +14,7 @@ describe("createApp admin and post editor routes", () => {
   let request: ReturnType<typeof createAppTestContext>["request"];
   let submitForm: ReturnType<typeof createAppTestContext>["submitForm"];
   let createPostDetail: ReturnType<typeof createAppTestContext>["createPostDetail"];
+  let createPostTranslation: ReturnType<typeof createAppTestContext>["createPostTranslation"];
   let createComment: ReturnType<typeof createAppTestContext>["createComment"];
   let createUser: ReturnType<typeof createAppTestContext>["createUser"];
   let setSignedInAdmin: ReturnType<typeof createAppTestContext>["setSignedInAdmin"];
@@ -25,6 +26,7 @@ describe("createApp admin and post editor routes", () => {
     request = context.request;
     submitForm = context.submitForm;
     createPostDetail = context.createPostDetail;
+    createPostTranslation = context.createPostTranslation;
     createComment = context.createComment;
     createUser = context.createUser;
     setSignedInAdmin = context.setSignedInAdmin;
@@ -35,19 +37,33 @@ describe("createApp admin and post editor routes", () => {
   it("renders the create post form for admins", async () => {
     setSignedInAdmin();
 
-    const res = await request("/post", undefined, true);
+    const res = await request("/posts/new", undefined, true);
 
     expect(res.status).toBe(200);
 
     const html = await res.text();
-  const mainSection = getMainHtml(html);
+    const mainSection = getMainHtml(html);
     expect(html).toContain("发布文章");
-    expect(html).toContain('form method="post" action="/post"');
+    expect(html).toContain('form method="post" action="/posts"');
     expect(html).toContain('id="title" name="title" type="text" class="form-control width-full" maxlength="200"');
     expect(html).toContain('id="tag" name="tag" type="text" class="form-control width-full" maxlength="200" required');
     expect(html).toContain('id="visibility" name="visibility" class="form-select width-full"');
     expect(html).toContain('option value="public" selected');
-    expect(html).toContain('id="body" name="body" class="form-control width-full" rows="18" required');
+    expect(html).toContain('id="body" name="body" class="form-control width-full post-editor-input" rows="18" required data-post-editor-input');
+    expect(html).toContain('class="mb-3 post-editor-breakout-shell"');
+    expect(html).toContain('class="post-editor-breakout" data-post-editor-root');
+    expect(html).toContain('data-post-editor-root');
+    expect(html).toContain('data-post-editor-pane="input"');
+    expect(html).toContain('data-post-editor-pane="preview"');
+    expect(html).toContain('data-post-editor-preview');
+    expect(html).toContain('data-post-editor-switch="input"');
+    expect(html).toContain('data-post-editor-switch="preview"');
+    expect(html).toContain('class="Box-body post-editor-pane-body"');
+    expect(html).toContain('src="/static/post-editor-preview.js"');
+    expect(html).not.toContain('id="source-lang" name="sourceLang" class="form-select width-full"');
+    expect(html).not.toContain("系统判定");
+    expect(html).not.toContain("浏览器即时渲染，宽屏双栏，窄屏点击切换。");
+    expect(html).not.toContain('class="f6 text-gray">正文</span>');
     expect(mainSection).not.toContain('href="/account"');
   });
 
@@ -64,7 +80,7 @@ describe("createApp admin and post editor routes", () => {
     setSignedInAdmin();
 
     const res = await submitForm(
-      "/post",
+      "/posts",
       {
         title: "Hello",
         tag: "   ",
@@ -84,7 +100,7 @@ describe("createApp admin and post editor routes", () => {
     setSignedInAdmin();
 
     const res = await submitForm(
-      "/post",
+      "/posts",
       {
         title: "Hello",
         tag: "news",
@@ -105,7 +121,7 @@ describe("createApp admin and post editor routes", () => {
     state.overrideIsAdmin = true;
 
     const res = await submitForm(
-      "/post",
+      "/posts",
       {
         title: "Hello",
         tag: "news",
@@ -121,17 +137,43 @@ describe("createApp admin and post editor routes", () => {
     expect(state.createdPost).toBeNull();
   });
 
-  it("redirects non-admin users away from the edit page", async () => {
-    const res = await request("/post/7/edit");
+  it("creates posts and redirects to the original page", async () => {
+    setSignedInAdmin();
+
+    const res = await submitForm(
+      "/posts",
+      {
+        title: "Hello",
+        tag: "news",
+        body: "Body"
+      },
+      true
+    );
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/login?next=%2Fpost%2F7%2Fedit");
+    expect(res.headers.get("location")).toBe("/posts/77/original");
+    expect(state.createdPost).toEqual({
+      title: "Hello",
+      body: "Body",
+      timestamp: expect.any(String),
+      authorId: 5,
+      sourceLang: "en",
+      tag: "news",
+      isPrivate: false
+    });
+  });
+
+  it("redirects non-admin users away from the edit page", async () => {
+    const res = await request("/posts/7/original/edit");
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/login?next=%2Fposts%2F7%2Foriginal%2Fedit");
   });
 
   it("returns 404 for invalid edit post ids", async () => {
     setSignedInAdmin();
 
-    const res = await request("/post/not-a-number/edit", undefined, true);
+    const res = await request("/posts/not-a-number/original/edit", undefined, true);
 
     expect(res.status).toBe(404);
   });
@@ -139,7 +181,7 @@ describe("createApp admin and post editor routes", () => {
   it("returns 404 when editing a missing post", async () => {
     setSignedInAdmin();
 
-    const res = await request("/post/7/edit", undefined, true);
+    const res = await request("/posts/7/original/edit", undefined, true);
 
     expect(res.status).toBe(404);
   });
@@ -148,7 +190,7 @@ describe("createApp admin and post editor routes", () => {
     setSignedInAdmin({ id: 5 });
     mockDb.getPostById = async () => createPostDetail({ author_id: 8, author_name: "other" });
 
-    const res = await request("/post/7/edit", undefined, true);
+    const res = await request("/posts/7/original/edit", undefined, true);
 
     expect(res.status).toBe(403);
 
@@ -160,30 +202,197 @@ describe("createApp admin and post editor routes", () => {
     setSignedInAdmin();
     mockDb.getPostById = async () => createPostDetail({ is_private: 1 });
 
-    const res = await request("/post/7/edit", undefined, true);
+    const res = await request("/posts/7/original/edit", undefined, true);
 
     expect(res.status).toBe(200);
 
     const html = await res.text();
     expect(html).toContain("编辑文章");
-    expect(html).toContain('action="/post/7/edit"');
+    expect(html).toContain('action="/posts/7/original/edit"');
     expect(html).toContain('value="news, updates"');
     expect(html).toContain('option value="private" selected');
     expect(html).toContain('name="isDraft" type="checkbox" checked');
+    expect(html).toContain('data-post-editor-empty-state="开始输入 Markdown，这里会即时显示预览。"');
     expect(html).toContain(">Existing body<");
+    expect(html).toContain("查看原文");
+    expect(html).toContain('href="/posts/7/original"');
+    expect(html).not.toContain('id="source-lang" name="sourceLang" class="form-select width-full"');
+    expect(html).not.toContain('action="/posts/7/translation/generate"');
+    expect(html).not.toContain('action="/posts/7/translation/edit"');
+    expect(html).not.toContain("浏览器即时渲染，宽屏双栏，窄屏点击切换。");
   });
 
-  it("normalizes legacy escaped line breaks before filling the edit textarea", async () => {
+  it("returns 404 for the translation editor before a translation exists", async () => {
     setSignedInAdmin();
-    mockDb.getPostById = async () => createPostDetail({ body: "line1\\r\\nline2" });
+    state.translationModel = "gpt-5.4-mini";
+    mockDb.getPostById = async () => createPostDetail({ source_lang: "zh" });
 
-    const res = await request("/post/7/edit", undefined, true);
+    const res = await request("/posts/7/translation/edit", undefined, true);
+
+    expect(res.status).toBe(404);
+  });
+
+  it("renders the standalone translation page for owned posts with existing translation state", async () => {
+    setSignedInAdmin();
+    state.translationModel = "gpt-5.4-mini";
+    mockDb.getPostById = async () => createPostDetail({ source_lang: "zh" });
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", status: "pending" });
+
+    const res = await request("/posts/7/translation/edit", undefined, true);
 
     expect(res.status).toBe(200);
 
     const html = await res.text();
-    expect(html).toContain("line1\nline2");
-    expect(html).not.toContain("line1\\r\\nline2");
+    expect(html).toContain("翻译版本");
+    expect(html).toContain('action="/posts/7/translation/edit"');
+    expect(html).toContain('formaction="/posts/7/translation/generate"');
+    expect(html).toContain('id="translation-source-lang" name="sourceLang" class="form-select width-full"');
+    expect(html).toContain("系统判定");
+    expect(html).toContain("等待生成");
+    expect(html).toContain("使用模型");
+    expect(html).toContain("gpt-5.4-mini");
+    expect(html).toContain('id="translated-body" name="translatedBody" class="form-control width-full post-editor-input" rows="18" data-post-editor-input');
+    expect(html).toContain('data-post-editor-preview');
+    expect(html).toContain("保存草稿");
+    expect(html).toContain("发布翻译");
+    expect(html).toContain("查看原文");
+    expect(html).toContain("翻译状态");
+    expect(html).toContain("翻译发布状态");
+    expect(html).not.toContain("直接跳过");
+  });
+
+  it("renders translated posts with a translation notice and lets readers switch back to the original", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7/translation", { headers: { cookie: "lang=en" } });
+
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    expect(html).toContain("Translated title");
+    expect(html).not.toContain("original title [原文标题]");
+    expect(html).toContain("Translated body");
+    expect(html).toContain("machine-translated version");
+    expect(html).toContain('href="/posts/7/original"');
+  });
+
+  it("redirects the default post reader to the translation for non-authors when languages differ", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", author_id: 5, source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7", { headers: { cookie: "lang=en" } });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/translation");
+  });
+
+  it("redirects the default post reader to the original for authors even when languages differ", async () => {
+    setSignedInAdmin({ id: 5 });
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", author_id: 5, source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7", { headers: { cookie: "lang=en" } }, true);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/original");
+  });
+
+  it("redirects admin non-authors to the translation when languages differ", async () => {
+    setSignedInAdmin({ id: 9 });
+    const translatedPost = createPostDetail({ id: 7, title: "Original title", body: "Original body", author_id: 5, source_lang: "en", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "zh", translated_title: "翻译后的标题", translated_body: "翻译后的内容", status: "completed" });
+
+    const res = await request("/posts/7", undefined, true);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/translation");
+  });
+
+  it("redirects the default post reader to the original when languages match", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", author_id: 5, source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7", { headers: { cookie: "lang=zh" } });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/original");
+  });
+
+  it("uses ascii parentheses for translated titles in the Chinese UI", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "Original title", body: "Original body", source_lang: "en", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "zh", translated_title: "翻译后的标题", translated_body: "翻译后的内容", status: "completed" });
+
+    const res = await request("/posts/7/translation", { headers: { cookie: "lang=zh" } });
+
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    expect(html).toContain("翻译后的标题");
+    expect(html).not.toContain("原标题 [Original title]");
+    expect(html).toContain("翻译后的内容");
+  });
+
+  it("renders manually edited translations with the generic translated notice", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "Original title", body: "Original body", source_lang: "en", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({
+      post_id: 7,
+      lang: "zh",
+      translated_title: "手动修改后的标题",
+      translated_body: "手动修改后的内容",
+      status: "completed",
+      is_machine_translation: 0
+    });
+
+    const res = await request("/posts/7/translation", { headers: { cookie: "lang=zh" } });
+
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    expect(html).toContain("当前阅读的是翻译版本");
+    expect(html).not.toContain("机器翻译版本");
+  });
+
+  it("renders the original post body when the reader explicitly requests it", async () => {
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7/original", { headers: { cookie: "lang=en" } });
+
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    expect(html).toContain("原文标题");
+    expect(html).toContain("原文内容");
+    expect(html).toContain("original version");
+    expect(html).not.toContain("machine-translated version");
+    expect(html).not.toContain("original title [原文标题]");
+    expect(html).toContain('href="/posts/7/translation"');
+  });
+
+  it("does not show the translated-version flash when source and reader languages match", async () => {
+    setSignedInAdmin();
+    const translatedPost = createPostDetail({ id: 7, title: "原文标题", body: "原文内容", source_lang: "zh", is_draft: 0 });
+    mockDb.getPostById = async () => translatedPost;
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", translated_title: "Translated title", translated_body: "Translated body", status: "completed" });
+
+    const res = await request("/posts/7/original", { headers: { cookie: "lang=zh" } }, true);
+
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    expect(html).not.toContain('class="flash flash-warn mb-3"');
+    expect(html).not.toContain("阅读翻译版");
+    expect(html).toContain("查看翻译");
+    expect(html).toContain('href="/posts/7/translation"');
   });
 
   it("shows the edit validation error when the updated body is empty", async () => {
@@ -191,7 +400,7 @@ describe("createApp admin and post editor routes", () => {
     mockDb.getPostById = async () => createPostDetail();
 
     const res = await submitForm(
-      "/post/7/edit",
+      "/posts/7/original/edit",
       {
         title: "Updated",
         tag: "notes",
@@ -213,7 +422,7 @@ describe("createApp admin and post editor routes", () => {
     mockDb.getPostById = async () => createPostDetail();
 
     const res = await submitForm(
-      "/post/7/edit",
+      "/posts/7/original/edit",
       {
         title: "Updated",
         tag: "   ",
@@ -233,7 +442,7 @@ describe("createApp admin and post editor routes", () => {
     setSignedInAdmin();
 
     const res = await submitForm(
-      "/post/not-a-number/edit",
+      "/posts/not-a-number/original/edit",
       {
         title: "Updated",
         tag: "notes",
@@ -247,7 +456,7 @@ describe("createApp admin and post editor routes", () => {
 
   it("redirects anonymous users to login when submitting post edits", async () => {
     const res = await submitForm(
-      "/post/7/edit",
+      "/posts/7/original/edit",
       {
         title: "Updated",
         tag: "notes",
@@ -256,20 +465,20 @@ describe("createApp admin and post editor routes", () => {
       false,
       {
         headers: {
-          referer: "http://127.0.0.1:8787/post/7/edit"
+          referer: "/posts/7/original/edit"
         }
       }
     );
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/login?next=%2Fpost%2F7%2Fedit");
+    expect(res.headers.get("location")).toBe("/login?next=%2Fposts%2F7%2Foriginal%2Fedit");
   });
 
   it("returns 404 when submitting edits for a missing post", async () => {
     setSignedInAdmin();
 
     const res = await submitForm(
-      "/post/7/edit",
+      "/posts/7/original/edit",
       {
         title: "Updated",
         tag: "notes",
@@ -286,7 +495,7 @@ describe("createApp admin and post editor routes", () => {
     mockDb.getPostById = async () => createPostDetail({ author_id: 8, author_name: "other" });
 
     const res = await submitForm(
-      "/post/7/edit",
+      "/posts/7/original/edit",
       {
         title: "Updated",
         tag: "notes",
@@ -301,12 +510,12 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain("你没有权限执行这个操作");
   });
 
-  it("updates owned posts and redirects back to the post page", async () => {
+  it("redirects to the translation page after editing when the source content changes", async () => {
     setSignedInAdmin();
     mockDb.getPostById = async () => createPostDetail();
 
     const res = await submitForm(
-      "/post/7/edit",
+      "/posts/7/original/edit",
       {
         title: "Updated",
         tag: "notes",
@@ -316,14 +525,68 @@ describe("createApp admin and post editor routes", () => {
     );
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/posts/7");
+    expect(res.headers.get("location")).toBe("/posts/7/translation/edit");
     expect(state.updatedPost).toEqual({
       id: 7,
       title: "Updated",
       body: "Updated body",
+      sourceLang: "en",
       tag: "notes",
       isPrivate: false
     });
+  });
+
+  it("redirects back to the post page when editing only metadata", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({ title: "Draft Post", body: "Existing body", source_lang: "en", tag: "news,draft,updates" });
+
+    const res = await submitForm(
+      "/posts/7/original/edit",
+      {
+        title: "Draft Post",
+        tag: "notes",
+        body: "Existing body"
+      },
+      true
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/original");
+  });
+
+  it("marks existing translations as stale when the source post changes", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({ source_lang: "en", tag: "notes" });
+    mockDb.listPostTranslations = async () => [
+      createPostTranslation({
+        post_id: 7,
+        lang: "zh",
+        translated_title: "旧标题",
+        translated_body: "旧正文",
+        status: "completed",
+        source_hash: "old-hash"
+      })
+    ];
+
+    const res = await submitForm(
+      "/posts/7/original/edit",
+      {
+        title: "Updated",
+        tag: "notes",
+        body: "Updated body"
+      },
+      true
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/translation/edit");
+    expect(state.upsertedTranslations).toHaveLength(1);
+    expect(state.upsertedTranslations[0]).toMatchObject({
+      postId: 7,
+      lang: "zh",
+      status: "stale"
+    });
+    expect(state.enqueuedTranslationJobs).toHaveLength(0);
   });
 
   it("updates owned posts to private visibility", async () => {
@@ -331,7 +594,7 @@ describe("createApp admin and post editor routes", () => {
     mockDb.getPostById = async () => createPostDetail();
 
     const res = await submitForm(
-      "/post/7/edit",
+      "/posts/7/original/edit",
       {
         title: "Updated",
         tag: "notes",
@@ -346,8 +609,153 @@ describe("createApp admin and post editor routes", () => {
       id: 7,
       title: "Updated",
       body: "Updated body",
+      sourceLang: "en",
       tag: "notes",
       isPrivate: true
+    });
+  });
+
+  it("queues translation generation only when the admin clicks generate translated version", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({
+      title: "English title",
+      body: "English body",
+      source_lang: "en",
+      tag: "notes",
+      is_draft: 0
+    });
+
+    const res = await submitForm(
+      "/posts/7/translation/generate",
+      {
+        sourceLang: "en"
+      },
+      true
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/translation/edit?translation=queued");
+    expect(state.upsertedTranslations).toHaveLength(1);
+    expect(state.upsertedTranslations[0]).toMatchObject({
+      postId: 7,
+      lang: "zh",
+      status: "pending",
+      isMachineTranslation: true
+    });
+    expect(state.enqueuedTranslationJobs).toEqual([
+      expect.objectContaining({ postId: 7, sourceLang: "en", targetLang: "zh", trigger: "update" })
+    ]);
+  });
+
+  it("forbids admins from generating a translation for posts they do not own", async () => {
+    setSignedInAdmin({ id: 5 });
+    mockDb.getPostById = async () => createPostDetail({ author_id: 8, author_name: "other", source_lang: "en" });
+
+    const res = await submitForm(
+      "/posts/7/translation/generate",
+      { sourceLang: "en" },
+      true
+    );
+
+    expect(res.status).toBe(403);
+    const html = await res.text();
+    expect(html).toContain("你没有权限执行这个操作");
+    expect(state.upsertedTranslations).toHaveLength(0);
+    expect(state.enqueuedTranslationJobs).toHaveLength(0);
+  });
+
+  it("forbids admins from saving a translation for posts they do not own", async () => {
+    setSignedInAdmin({ id: 5 });
+    mockDb.getPostById = async () => createPostDetail({ author_id: 8, author_name: "other", source_lang: "en" });
+
+    const res = await submitForm(
+      "/posts/7/translation/edit",
+      { translatedTitle: "x", translatedBody: "y" },
+      true
+    );
+
+    expect(res.status).toBe(403);
+    expect(state.upsertedTranslations).toHaveLength(0);
+  });
+
+  it("redirects to login when a non-admin attempts to generate or save a translation", async () => {
+    const generateRes = await submitForm("/posts/7/translation/generate", { sourceLang: "en" });
+    expect(generateRes.status).toBe(302);
+    expect(generateRes.headers.get("location")).toBe("/login?next=%2Fposts%2F7%2Ftranslation%2Fedit");
+
+    const saveRes = await submitForm("/posts/7/translation/edit", { translatedBody: "x" });
+    expect(saveRes.status).toBe(302);
+    expect(saveRes.headers.get("location")).toBe("/login?next=%2Fposts%2F7%2Ftranslation%2Fedit");
+  });
+
+  it("lets admins save a translation draft", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({
+      title: "English title",
+      body: "English body",
+      source_lang: "en",
+      tag: "notes",
+      is_draft: 0
+    });
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "zh", status: "draft" });
+
+    const res = await submitForm(
+      "/posts/7/translation/edit",
+      {
+        translatedTitle: "中文标题草稿",
+        translatedBody: "中文正文草稿",
+        translationAction: "draft"
+      },
+      true
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/translation/edit?translation=draft");
+    expect(state.upsertedTranslations).toHaveLength(1);
+    expect(state.upsertedTranslations[0]).toMatchObject({
+      postId: 7,
+      lang: "zh",
+      translatedTitle: "中文标题草稿",
+      translatedBody: "中文正文草稿",
+      status: "draft",
+      provider: "manual:editor",
+      isMachineTranslation: false,
+      translatedAt: null
+    });
+  });
+
+  it("lets admins save a manually edited translated version", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({
+      title: "English title",
+      body: "English body",
+      source_lang: "en",
+      tag: "notes",
+      is_draft: 0
+    });
+    mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "zh", status: "draft" });
+
+    const res = await submitForm(
+      "/posts/7/translation/edit",
+      {
+        translatedTitle: "中文标题",
+        translatedBody: "中文正文"
+      },
+      true
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts/7/translation");
+    expect(state.upsertedTranslations).toHaveLength(1);
+    expect(state.upsertedTranslations[0]).toMatchObject({
+      postId: 7,
+      lang: "zh",
+      translatedTitle: "中文标题",
+      translatedBody: "中文正文",
+      status: "completed",
+      provider: "manual:editor",
+      isMachineTranslation: false,
+      isPublished: true
     });
   });
 
@@ -449,7 +857,7 @@ describe("createApp admin and post editor routes", () => {
   it("deletes posts and normalizes redirects back to the admin dashboard", async () => {
     setSignedInAdmin();
 
-    const res = await submitForm("/admin/posts/7/delete", { redirectTo: "/posts/7" }, true);
+    const res = await submitForm("/posts/7/delete", { redirectTo: "/posts/7/original" }, true);
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("/admin");
@@ -459,19 +867,19 @@ describe("createApp admin and post editor routes", () => {
   it("returns 404 when deleting a post with an invalid id", async () => {
     setSignedInAdmin();
 
-    const res = await submitForm("/admin/posts/not-a-number/delete", { redirectTo: "/admin" }, true);
+    const res = await submitForm("/posts/not-a-number/delete", { redirectTo: "/admin" }, true);
 
     expect(res.status).toBe(404);
   });
 
   it("redirects anonymous users to login when deleting a post", async () => {
     const res = await submitForm(
-      "/admin/posts/7/delete",
+      "/posts/7/delete",
       { redirectTo: "/admin" },
       false,
       {
         headers: {
-          referer: "http://127.0.0.1:8787/admin"
+          referer: "/admin"
         }
       }
     );
@@ -527,7 +935,7 @@ describe("createApp admin and post editor routes", () => {
       false,
       {
         headers: {
-          referer: "http://127.0.0.1:8787/admin/users/2"
+          referer: "/admin/users/2"
         }
       }
     );
@@ -570,7 +978,7 @@ describe("createApp admin and post editor routes", () => {
       false,
       {
         headers: {
-          referer: "http://127.0.0.1:8787/admin/users/2"
+          referer: "/admin/users/2"
         }
       }
     );
@@ -627,7 +1035,7 @@ describe("createApp admin and post editor routes", () => {
       false,
       {
         headers: {
-          referer: "http://127.0.0.1:8787/admin/users/2"
+          referer: "/admin/users/2"
         }
       }
     );

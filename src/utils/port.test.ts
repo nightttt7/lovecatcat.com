@@ -1,5 +1,6 @@
+import { EventEmitter } from "node:events";
 import net from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_PORT, findAvailablePort, parsePort } from "./port";
 
 const servers: net.Server[] = [];
@@ -88,5 +89,39 @@ describe("port utilities", () => {
     await expect(findAvailablePort(65536, 1)).rejects.toThrow(
       "Could not find an available port starting at 65536."
     );
+  });
+
+  it("treats EACCES errors as the port being unavailable and continues searching", async () => {
+    let attemptIndex = 0;
+    const createServerSpy = vi.spyOn(net, "createServer").mockImplementation(() => {
+      const fake = new EventEmitter() as unknown as net.Server;
+      (fake as unknown as { unref: () => void }).unref = () => {};
+      (fake as unknown as { listen: (port: number) => void }).listen = (port: number) => {
+        const currentAttempt = attemptIndex;
+        attemptIndex += 1;
+        queueMicrotask(() => {
+          if (currentAttempt === 0) {
+            const error = new Error("permission denied") as NodeJS.ErrnoException;
+            error.code = "EACCES";
+            (fake as unknown as EventEmitter).emit("error", error);
+            return;
+          }
+          (fake as unknown as EventEmitter).emit("listening");
+          void port;
+        });
+      };
+      (fake as unknown as { close: (callback: (error?: Error) => void) => void }).close = (callback) => {
+        callback();
+      };
+      return fake;
+    });
+
+    try {
+      const result = await findAvailablePort(4000);
+      expect(result).toBe(4001);
+      expect(createServerSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      createServerSpy.mockRestore();
+    }
   });
 });

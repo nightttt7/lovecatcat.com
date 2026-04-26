@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+const disallowedLocalEnvKeys = new Set(["OPENAI_API_KEY_CAT"]);
+
 const stripQuotes = (value: string) => {
   if (
     (value.startsWith('"') && value.endsWith('"')) ||
@@ -41,7 +43,7 @@ export const loadLocalEnvFiles = (cwd = process.cwd()) => {
       const key = line.slice(0, separatorIndex).trim();
       const value = stripQuotes(line.slice(separatorIndex + 1).trim());
 
-      if (!key || lockedKeys.has(key)) {
+      if (!key || lockedKeys.has(key) || disallowedLocalEnvKeys.has(key)) {
         continue;
       }
 
