@@ -61,6 +61,7 @@ const buildPost = (overrides: Partial<PostDetailRow> = {}): PostDetailRow => ({
 
 const buildJob = (post: PostDetailRow, overrides: Partial<TranslationJobMessage> = {}): TranslationJobMessage => ({
   postId: post.id,
+  authorId: post.author_id,
   sourceLang: "en",
   targetLang: "zh",
   sourceHash: hashPostTranslationSource({
@@ -96,6 +97,37 @@ describe("processTranslationJob", () => {
     expect(state.upserts[1].provider).toBe("openai:test-model");
     expect(state.upserts[1].translatedBody).toBe("[zh] Original body");
     expect(state.upserts[1].errorMessage).toBeNull();
+  });
+
+  it("loads private posts with the job author identity", async () => {
+    const post = buildPost({ is_private: 1 });
+    const state: MinimalDbState = { upserts: [], current: null };
+    const db = {
+      getPostById: async (_id: number, options: { viewerId?: number | null }) => (options.viewerId === post.author_id ? post : null),
+      getPostTranslation: async () => state.current,
+      upsertPostTranslation: async (input: UpsertPostTranslationInput) => {
+        state.upserts.push(input);
+        state.current = {
+          id: 1,
+          post_id: input.postId,
+          lang: input.lang,
+          translated_title: input.translatedTitle,
+          translated_body: input.translatedBody,
+          status: input.status,
+          source_hash: input.sourceHash,
+          provider: input.provider,
+          error_message: input.errorMessage ?? null,
+          is_machine_translation: input.isMachineTranslation ? 1 : 0,
+          is_published: input.isPublished ? 1 : 0,
+          translated_at: input.translatedAt
+        };
+      }
+    } as unknown as BlogDb;
+
+    const result = await processTranslationJob(buildJob(post), { db, provider: successProvider });
+
+    expect(result).toBe("completed");
+    expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "draft"]);
   });
 
   it("records a failed status when the provider throws", async () => {

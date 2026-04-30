@@ -20,4 +20,8 @@ describe("formatDate", () => {
   it("formats valid date in English as yyyy-mm-dd", () => {
     expect(formatDate("2024-01-02 03:04:05", "en")).toBe("2024-01-02");
   });
+
+  it("formats valid date in Norwegian with a Norwegian locale", () => {
+    expect(formatDate("2024-01-02 03:04:05", "no")).toContain("2024");
+  });
 });

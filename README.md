@@ -207,7 +207,7 @@ The local files still support values such as `OPENAI_MODEL_CAT`:
 
 - `ADMIN_EMAILS`: required, the list of admin email addresses, separated by commas, semicolons, or new lines.
 - `OPENAI_API_KEY_CAT`: required for translation generation, but do not place it in `.env` or `.env.development`. Local development should read it from the Windows User / Machine environment, and Cloudflare should read it from Wrangler-managed secrets. Without it, translation jobs are dropped with a warning.
-- `OPENAI_MODEL_CAT`: optional. Overrides the default OpenAI model used by the translation provider. Defaults to `gpt-5.4-mini`.
+- `OPENAI_MODEL_CAT`: optional. Overrides the default OpenAI model used by the translation provider. Defaults to `gpt-5.4-mini`. When setting it in Cloudflare, use an exact OpenAI model id that is available to the configured OpenAI account; an invalid or unavailable model id will make translation jobs fail.
 - `DB_PATH`: optional, the local SQLite path. The default is the project-root `dev.db`.
 - `PORT`: optional, the local port. If occupied, the app automatically switches to another available port.
 
@@ -222,6 +222,10 @@ npx wrangler secret put ADMIN_EMAILS --env preview
 npx wrangler secret put ADMIN_EMAILS
 npx wrangler secret put OPENAI_API_KEY_CAT --env preview
 npx wrangler secret put OPENAI_API_KEY_CAT
+
+# Optional model override; omit it to use gpt-5.4-mini
+npx wrangler secret put OPENAI_MODEL_CAT --env preview
+npx wrangler secret put OPENAI_MODEL_CAT
 ```
 
 For example, enter:

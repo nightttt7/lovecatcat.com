@@ -68,6 +68,11 @@ export const addPostsSourceLangColumnSql = `
   ADD COLUMN source_lang TEXT NOT NULL DEFAULT 'zh'
 `;
 
+export const addPostsSourceLangManualColumnSql = `
+  ALTER TABLE posts
+  ADD COLUMN source_lang_manual INTEGER NOT NULL DEFAULT 0
+`;
+
 export const backfillCommentUserIdsSql = `
   UPDATE comments
   SET user_id = (
@@ -89,6 +94,7 @@ export const createPostsTableWithRequiredTagSql = `
     author_id INTEGER,
     is_private INTEGER NOT NULL DEFAULT 0,
     source_lang TEXT NOT NULL DEFAULT 'zh',
+    source_lang_manual INTEGER NOT NULL DEFAULT 0,
     tag TEXT NOT NULL,
     FOREIGN KEY (author_id) REFERENCES users(id)
   )

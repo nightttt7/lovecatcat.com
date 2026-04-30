@@ -44,7 +44,17 @@ class MockD1Database {
   postColumns: Array<{ name: string; notnull?: number }> = [{ name: "tag", notnull: 0 }];
   failingRunSqlFragment: string | null = null;
   failingRunError = new Error("Mock run failure");
-  existingPostsResults = [] as Array<{ id: number; title: string | null; body: string | null; timestamp: string | null; author_id: number | null; tag: string | null; is_private?: number | null }>;
+  existingPostsResults = [] as Array<{
+    id: number;
+    title: string | null;
+    body: string | null;
+    timestamp: string | null;
+    author_id: number | null;
+    tag: string | null;
+    is_private?: number | null;
+    source_lang?: string | null;
+    source_lang_manual?: number | null;
+  }>;
   existingCommentsResults = [] as Array<{ id: number; name: string | null; body: string | null; is_user: number | null; timestamp: string | null; post_id: number | null; user_id?: number | null }>;
   listPostsResults: PostListRow[] = [];
   postByIdResult: PostDetailRow | null = null;
@@ -238,7 +248,7 @@ describe("createD1Db", () => {
     expect(rawDb.findCall("run", "ALTER TABLE comments ADD COLUMN user_id INTEGER")).toBeDefined();
     expect(rawDb.findCall("run", "ALTER TABLE posts RENAME TO posts__legacy")).toBeDefined();
     expect(rawDb.findCall("run", "CREATE TABLE posts (")).toBeDefined();
-    expect(rawDb.findCall("run", "INSERT INTO posts (id, title, body, timestamp, author_id, tag, is_private, source_lang)")?.args).toEqual([
+    expect(rawDb.findCall("run", "INSERT INTO posts (id, title, body, timestamp, author_id, tag, is_private, source_lang, source_lang_manual)")?.args).toEqual([
       1,
       "Legacy",
       "Body",
@@ -246,7 +256,8 @@ describe("createD1Db", () => {
       1,
       "markdown test",
       0,
-      "zh"
+      "zh",
+      0
     ]);
     expect(rawDb.findCall("run", "CREATE TABLE IF NOT EXISTS sessions")).toBeDefined();
     expect(rawDb.execCalls).toHaveLength(0);
@@ -513,9 +524,18 @@ describe("createD1Db", () => {
       1,
       "news",
       1,
-      "zh"
+      "zh",
+      0
     ]);
-    expect(rawDb.findCall("run", "SET title = ?, body = ?, tag = ?, is_private = ?, source_lang = ?")?.args).toEqual(["Updated", "Body", "updated", 0, "en", 31]);
+    expect(rawDb.findCall("run", "SET title = ?, body = ?, tag = ?, is_private = ?, source_lang = ?, source_lang_manual = COALESCE")?.args).toEqual([
+      "Updated",
+      "Body",
+      "updated",
+      0,
+      "en",
+      null,
+      31
+    ]);
     expect(rawDb.findCall("run", "INSERT INTO sessions")?.args).toEqual([
       1,
       "session-hash",

@@ -92,6 +92,26 @@ describe("renderLayout", () => {
     expect(html).toContain('aria-label="Open menu"');
     expect(html).toContain("New post");
     expect(html).toContain("Admin dashboard");
+    expect(html).toContain("Language: English");
+    expect(html).toContain("/api/lang?to=no");
+    expect(html).toContain("Norsk");
+  });
+
+  it("renders Norwegian UI language controls", () => {
+    const result = renderLayout({
+      title: "Test",
+      description: "Test",
+      site: mockSiteConfig,
+      isAdmin: true,
+      lang: "no",
+      body: "Body"
+    });
+
+    const html = result.toString();
+    expect(html).toContain('<html lang="no"');
+    expect(html).toContain("Språk: Norsk");
+    expect(html).toContain("Nytt innlegg");
+    expect(html).toContain("Adminpanel");
   });
 
   it("renders tools link next to about in the header", () => {
@@ -142,6 +162,7 @@ describe("renderLayout", () => {
     expect(mobilePanelMatch?.[0]).not.toContain('href=/labels');
     expect(mobilePanelMatch?.[0]).not.toContain('href=/authors');
     expect(mobilePanelMatch?.[0]).not.toContain('>Tools<');
+    expect(html).toContain('href=/api/lang?to=no');
   });
 
   it("shows account and logout links for signed-in users", () => {

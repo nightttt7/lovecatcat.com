@@ -5,8 +5,10 @@ describe("i18n utilities", () => {
   it("returns the requested translation for supported languages", () => {
     expect(t("latestPosts", "zh")).toBe("所有博文");
     expect(t("latestPosts", "en")).toBe("All posts");
+    expect(t("latestPosts", "no")).toBe("Alle innlegg");
     expect(t("tools", "zh")).toBe("工具");
     expect(t("tools", "en")).toBe("Tools");
+    expect(t("tools", "no")).toBe("Verktøy");
   });
 
   it("falls back to Chinese when the language code is unsupported", () => {
@@ -15,5 +17,6 @@ describe("i18n utilities", () => {
 
   it("keeps the translation key sets aligned across locales", () => {
     expect(Object.keys(translations.en).sort()).toEqual(Object.keys(translations.zh).sort());
+    expect(Object.keys(translations.no).sort()).toEqual(Object.keys(translations.zh).sort());
   });
 });

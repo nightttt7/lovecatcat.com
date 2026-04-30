@@ -1,4 +1,4 @@
-import type { Lang } from "../utils/i18n";
+import type { TranslationLang } from "../utils/i18n";
 import { buildBodyTranslationPrompt, buildTitleTranslationPrompt } from "./prompts";
 import type { TranslationProvider } from "./types";
 
@@ -55,7 +55,6 @@ const callOpenAiChat = async ({
       },
       body: JSON.stringify({
         model,
-        temperature: 0.2,
         messages
       }),
       signal: controller.signal
@@ -86,7 +85,7 @@ const callOpenAiChat = async ({
 
 const translateTitle = async (
   config: { apiKey: string; model: string; endpoint: string; fetchImpl: typeof fetch; timeoutMs: number },
-  targetLang: Lang,
+  targetLang: TranslationLang,
   title: string
 ) => {
   return callOpenAiChat({
@@ -100,7 +99,7 @@ const translateTitle = async (
 
 const translateBody = async (
   config: { apiKey: string; model: string; endpoint: string; fetchImpl: typeof fetch; timeoutMs: number },
-  targetLang: Lang,
+  targetLang: TranslationLang,
   body: string
 ) => {
   return callOpenAiChat({
@@ -120,7 +119,7 @@ export const createOpenAiTranslationProvider = (
     throw new Error("OpenAI translation provider requires an apiKey");
   }
 
-  const model = options.model ?? DEFAULT_OPENAI_TRANSLATION_MODEL;
+  const model = options.model?.trim() || DEFAULT_OPENAI_TRANSLATION_MODEL;
   const endpoint = options.endpoint ?? OPENAI_CHAT_COMPLETIONS_URL;
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? (() => new Date());

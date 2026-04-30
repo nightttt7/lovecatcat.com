@@ -1,10 +1,10 @@
-import type { Lang } from "../utils/i18n";
+import type { TranslationLang } from "../utils/i18n";
 
-const getTargetLanguageName = (lang: Lang) => {
+const getTargetLanguageName = (lang: TranslationLang) => {
   return lang === "zh" ? "Simplified Chinese" : "English";
 };
 
-export const buildBodyTranslationPrompt = (targetLang: Lang) => {
+export const buildBodyTranslationPrompt = (targetLang: TranslationLang) => {
   const targetLanguageName = getTargetLanguageName(targetLang);
 
   return [
@@ -33,7 +33,7 @@ export const buildBodyTranslationPrompt = (targetLang: Lang) => {
   ].join("\n");
 };
 
-export const buildTitleTranslationPrompt = (targetLang: Lang) => {
+export const buildTitleTranslationPrompt = (targetLang: TranslationLang) => {
   const targetLanguageName = getTargetLanguageName(targetLang);
 
   return [

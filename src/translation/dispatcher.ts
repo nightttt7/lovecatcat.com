@@ -16,7 +16,7 @@ export const processTranslationJob = async (
 
   const post = await db.getPostById(job.postId, {
     includeDrafts: true,
-    viewerId: null
+    viewerId: job.authorId
   });
 
   if (!post?.body) {

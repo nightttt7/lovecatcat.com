@@ -1,6 +1,6 @@
 import { sha256 } from "@noble/hashes/sha2.js";
-import type { Lang } from "../utils/i18n";
-import { isLang, siteLanguages } from "../utils/i18n";
+import type { TranslationLang } from "../utils/i18n";
+import { isTranslationLang, translationLanguages } from "../utils/i18n";
 
 const encoder = new TextEncoder();
 const HAN_REGEX = /[\u3400-\u9fff]/g;
@@ -42,7 +42,7 @@ const getLanguageSignal = (value: string) => {
   };
 };
 
-export const detectPostSourceLanguage = (title: string, body: string): Lang | null => {
+export const detectPostSourceLanguage = (title: string, body: string): TranslationLang | null => {
   const titleSignal = getLanguageSignal(title);
   const bodySignal = getLanguageSignal(body);
   const weightedHanCount = titleSignal.hanCount * 3 + bodySignal.hanCount;
@@ -89,18 +89,18 @@ export const detectPostSourceLanguage = (title: string, body: string): Lang | nu
 
 export const normalizeSelectedSourceLanguage = (
   value: string | undefined,
-  detectedLanguage: Lang | null,
-  fallbackLanguage: Lang
+  detectedLanguage: TranslationLang | null,
+  fallbackLanguage: TranslationLang
 ) => {
-  if (value && isLang(value)) {
+  if (value && isTranslationLang(value)) {
     return value;
   }
 
   return detectedLanguage ?? fallbackLanguage;
 };
 
-export const getTranslationTargetLanguages = (sourceLang: Lang) => {
-  return siteLanguages.filter((lang) => lang !== sourceLang);
+export const getTranslationTargetLanguages = (sourceLang: TranslationLang) => {
+  return translationLanguages.filter((lang) => lang !== sourceLang);
 };
 
 export const hashPostTranslationSource = ({
@@ -110,7 +110,7 @@ export const hashPostTranslationSource = ({
 }: {
   title: string | null;
   body: string;
-  sourceLang: Lang;
+  sourceLang: TranslationLang;
 }) => {
   return toHex(sha256(encoder.encode(JSON.stringify({ title, body, sourceLang }))));
 };

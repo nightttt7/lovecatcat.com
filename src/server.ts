@@ -15,7 +15,7 @@ const dbPath = process.env.DB_PATH ?? path.resolve(process.cwd(), "dev.db");
 const sqliteDb = createSqliteDb({ dbPath, readonly: false });
 
 const openAiApiKey = process.env.OPENAI_API_KEY_CAT ?? "";
-const openAiModel = process.env.OPENAI_MODEL_CAT;
+const openAiModel = process.env.OPENAI_MODEL_CAT?.trim();
 
 const dispatchTranslationJobs = openAiApiKey
   ? createTranslationDispatcher({

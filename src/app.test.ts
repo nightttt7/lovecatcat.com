@@ -320,6 +320,85 @@ describe("createApp", () => {
       expect(html).not.toContain("Unpublished translated title");
     });
 
+    it("uses published translated titles for non-authors when the UI language differs from the source", async () => {
+      mockDb.listPosts = async () => [
+        {
+          id: 1,
+          title: "Original title",
+          timestamp: "2024-06-25 10:00:00",
+          tag: "news",
+          author_id: 7,
+          author_name: "lian",
+          source_lang: "zh",
+          is_draft: 0
+        }
+      ];
+      mockDb.countPosts = async () => 1;
+      mockDb.getPostTranslation = async () => createPostTranslation({
+        post_id: 1,
+        lang: "en",
+        translated_title: "Published translated title",
+        translated_body: "Published translated body",
+        status: "completed",
+        is_published: 1
+      });
+
+      const res = await request("/", {
+        headers: {
+          cookie: "lang=en"
+        }
+      });
+
+      expect(res.status).toBe(200);
+
+      const html = await res.text();
+      expect(html).toContain("Published translated title");
+      expect(html).not.toContain("Original title");
+    });
+
+    it("uses original titles for authors on the home page regardless of UI language", async () => {
+      setSignedInUser({ id: 7 });
+      let translationLookups = 0;
+      mockDb.listPosts = async () => [
+        {
+          id: 1,
+          title: "Original title",
+          timestamp: "2024-06-25 10:00:00",
+          tag: "news",
+          author_id: 7,
+          author_name: "lian",
+          source_lang: "zh",
+          is_draft: 0
+        }
+      ];
+      mockDb.countPosts = async () => 1;
+      mockDb.getPostTranslation = async () => {
+        translationLookups += 1;
+        return createPostTranslation({
+          post_id: 1,
+          lang: "en",
+          translated_title: "Published translated title",
+          translated_body: "Published translated body",
+          status: "completed",
+          is_published: 1
+        });
+      };
+
+      const app = createApp(mockOptions);
+      const res = await app.request("/", {
+        headers: {
+          cookie: "lang=en; lovecatcat_session=test-session-token"
+        }
+      });
+
+      expect(res.status).toBe(200);
+
+      const html = await res.text();
+      expect(html).toContain("Original title");
+      expect(html).not.toContain("Published translated title");
+      expect(translationLookups).toBe(0);
+    });
+
     it("renders author names as links on the home page", async () => {
       mockDb.listPosts = async () => [
         {

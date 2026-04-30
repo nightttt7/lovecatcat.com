@@ -43,6 +43,18 @@ describe("createApp route flows", () => {
     expect(res.headers.get("set-cookie")).toContain("lang=en");
   });
 
+  it("sets the Norwegian language cookie", async () => {
+    const res = await request("/api/lang?to=no", {
+      headers: {
+        referer: "/posts"
+      }
+    });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/posts");
+    expect(res.headers.get("set-cookie")).toContain("lang=no");
+  });
+
   it("sanitizes the login next path to keep redirects local", async () => {
     const res = await request("/login?next=//evil.example/path");
 

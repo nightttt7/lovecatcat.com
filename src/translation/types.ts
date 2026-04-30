@@ -1,11 +1,12 @@
-import type { Lang } from "../utils/i18n";
+import type { TranslationLang } from "../utils/i18n";
 
 export type TranslationJobTrigger = "create" | "update";
 
 export type TranslationJobMessage = {
   postId: number;
-  sourceLang: Lang;
-  targetLang: Lang;
+  authorId: number | null;
+  sourceLang: TranslationLang;
+  targetLang: TranslationLang;
   sourceHash: string;
   trigger: TranslationJobTrigger;
 };
@@ -19,8 +20,8 @@ export type TranslationResult = {
 
 export type TranslationProvider = {
   translatePost: (input: {
-    sourceLang: Lang;
-    targetLang: Lang;
+    sourceLang: TranslationLang;
+    targetLang: TranslationLang;
     title: string | null;
     body: string;
   }) => Promise<TranslationResult>;

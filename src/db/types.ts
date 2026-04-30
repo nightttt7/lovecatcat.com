@@ -8,6 +8,7 @@ export type PostListRow = {
   author_id: number | null;
   author_name: string | null;
   source_lang?: string | null;
+  source_lang_manual?: number | null;
   is_draft: number | null;
   is_private?: number | null;
 };
@@ -21,6 +22,7 @@ export type PostDetailRow = {
   author_id: number | null;
   author_name: string | null;
   source_lang?: string | null;
+  source_lang_manual?: number | null;
   is_draft: number | null;
   is_private?: number | null;
 };
@@ -114,6 +116,7 @@ export type CreatePostInput = {
   timestamp: string;
   authorId: number;
   sourceLang: string;
+  sourceLangManual?: boolean;
   tag: string;
   isPrivate: boolean;
 };
@@ -123,6 +126,7 @@ export type UpdatePostInput = {
   title: string | null;
   body: string;
   sourceLang: string;
+  sourceLangManual?: boolean;
   tag: string;
   isPrivate: boolean;
 };

@@ -23,6 +23,7 @@ import {
   addCommentsUserIdColumnSql,
   addPostsPrivateColumnSql,
   addPostsSourceLangColumnSql,
+  addPostsSourceLangManualColumnSql,
   addPostTranslationsIsPublishedColumnSql,
   addUsersBlockedColumnSql,
   backfillCommentUserIdsSql,
@@ -56,6 +57,7 @@ const listPostsSql = `
     p.author_id,
     p.is_private,
     p.source_lang,
+    p.source_lang_manual,
     u.username AS author_name,
     CASE WHEN p.tag LIKE '%draft%' THEN 1 ELSE 0 END AS is_draft
   FROM posts p
@@ -87,6 +89,7 @@ const postDetailSql = `
     p.author_id,
     p.is_private,
     p.source_lang,
+    p.source_lang_manual,
     u.username AS author_name,
     CASE WHEN p.tag LIKE '%draft%' THEN 1 ELSE 0 END AS is_draft
   FROM posts p
@@ -106,6 +109,7 @@ const postByTitleSql = `
     p.author_id,
     p.is_private,
     p.source_lang,
+    p.source_lang_manual,
     u.username AS author_name,
     CASE WHEN p.tag LIKE '%draft%' THEN 1 ELSE 0 END AS is_draft
   FROM posts p
@@ -278,6 +282,7 @@ const listPostsByAuthorSql = `
     p.author_id,
     p.is_private,
     p.source_lang,
+    p.source_lang_manual,
     u.username AS author_name,
     CASE WHEN p.tag LIKE '%draft%' THEN 1 ELSE 0 END AS is_draft
   FROM posts p
@@ -289,13 +294,13 @@ const listPostsByAuthorSql = `
 `;
 
 const createPostSql = `
-  INSERT INTO posts (title, body, timestamp, author_id, tag, is_private, source_lang)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO posts (title, body, timestamp, author_id, tag, is_private, source_lang, source_lang_manual)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const updatePostSql = `
   UPDATE posts
-  SET title = ?, body = ?, tag = ?, is_private = ?, source_lang = ?
+  SET title = ?, body = ?, tag = ?, is_private = ?, source_lang = ?, source_lang_manual = COALESCE(?, source_lang_manual)
   WHERE id = ?
 `;
 
@@ -435,6 +440,7 @@ type MigratablePostRow = {
   tag: string | null;
   is_private?: number | null;
   source_lang?: string | null;
+  source_lang_manual?: number | null;
 };
 
 type MigratableCommentRow = {
@@ -490,17 +496,22 @@ export const createSqliteDb = (options: SqliteOptions): BlogDb => {
         const tagColumn = postColumns.find((column) => column.name === "tag");
         const hasPrivateColumn = postColumns.some((column) => column.name === "is_private");
         const hasSourceLangColumn = postColumns.some((column) => column.name === "source_lang");
+        const hasSourceLangManualColumn = postColumns.some((column) => column.name === "source_lang_manual");
 
         if (!tagColumn || tagColumn.notnull !== 1) {
           const existingPosts = db
             .prepare(
               hasPrivateColumn
                 ? hasSourceLangColumn
-                  ? "SELECT id, title, body, timestamp, author_id, tag, is_private, source_lang FROM posts ORDER BY id"
-                  : "SELECT id, title, body, timestamp, author_id, tag, is_private, 'zh' AS source_lang FROM posts ORDER BY id"
+                  ? hasSourceLangManualColumn
+                    ? "SELECT id, title, body, timestamp, author_id, tag, is_private, source_lang, source_lang_manual FROM posts ORDER BY id"
+                    : "SELECT id, title, body, timestamp, author_id, tag, is_private, source_lang, 0 AS source_lang_manual FROM posts ORDER BY id"
+                  : "SELECT id, title, body, timestamp, author_id, tag, is_private, 'zh' AS source_lang, 0 AS source_lang_manual FROM posts ORDER BY id"
                 : hasSourceLangColumn
-                  ? "SELECT id, title, body, timestamp, author_id, tag, source_lang FROM posts ORDER BY id"
-                  : "SELECT id, title, body, timestamp, author_id, tag, 'zh' AS source_lang FROM posts ORDER BY id"
+                  ? hasSourceLangManualColumn
+                    ? "SELECT id, title, body, timestamp, author_id, tag, 0 AS is_private, source_lang, source_lang_manual FROM posts ORDER BY id"
+                    : "SELECT id, title, body, timestamp, author_id, tag, 0 AS is_private, source_lang, 0 AS source_lang_manual FROM posts ORDER BY id"
+                  : "SELECT id, title, body, timestamp, author_id, tag, 0 AS is_private, 'zh' AS source_lang, 0 AS source_lang_manual FROM posts ORDER BY id"
             )
             .all() as MigratablePostRow[];
 
@@ -508,7 +519,7 @@ export const createSqliteDb = (options: SqliteOptions): BlogDb => {
           db.exec(createPostsTableWithRequiredTagSql);
 
           const insertPostStmt = db.prepare(
-            "INSERT INTO posts (id, title, body, timestamp, author_id, tag, is_private, source_lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO posts (id, title, body, timestamp, author_id, tag, is_private, source_lang, source_lang_manual) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
           );
 
           for (const post of existingPosts) {
@@ -520,7 +531,8 @@ export const createSqliteDb = (options: SqliteOptions): BlogDb => {
               post.author_id,
               coerceStoredTagValue(post.tag),
               post.is_private ?? 0,
-              post.source_lang ?? "zh"
+              post.source_lang ?? "zh",
+              post.source_lang_manual ?? 0
             );
           }
           rebuiltPosts = true;
@@ -530,6 +542,10 @@ export const createSqliteDb = (options: SqliteOptions): BlogDb => {
 
         if (!rebuiltPosts && !hasSourceLangColumn) {
           db.exec(addPostsSourceLangColumnSql);
+        }
+
+        if (!rebuiltPosts && !hasSourceLangManualColumn) {
+          db.exec(addPostsSourceLangManualColumnSql);
         }
 
         const postCommentForeignKeyTarget = commentColumns.length > 0
@@ -684,12 +700,29 @@ export const createSqliteDb = (options: SqliteOptions): BlogDb => {
     },
     async createPost(input: CreatePostInput): Promise<number> {
       const stmt = db.prepare(createPostSql);
-      const result = stmt.run(input.title, input.body, input.timestamp, input.authorId, input.tag, input.isPrivate ? 1 : 0, input.sourceLang);
+      const result = stmt.run(
+        input.title,
+        input.body,
+        input.timestamp,
+        input.authorId,
+        input.tag,
+        input.isPrivate ? 1 : 0,
+        input.sourceLang,
+        input.sourceLangManual ? 1 : 0
+      );
       return Number(result.lastInsertRowid);
     },
     async updatePost(input: UpdatePostInput): Promise<void> {
       const stmt = db.prepare(updatePostSql);
-      stmt.run(input.title, input.body, input.tag, input.isPrivate ? 1 : 0, input.sourceLang, input.id);
+      stmt.run(
+        input.title,
+        input.body,
+        input.tag,
+        input.isPrivate ? 1 : 0,
+        input.sourceLang,
+        input.sourceLangManual === undefined ? null : input.sourceLangManual ? 1 : 0,
+        input.id
+      );
     },
     async getPostTranslation(postId: number, lang: string): Promise<PostTranslationRow | null> {
       const stmt = db.prepare(getPostTranslationSql);

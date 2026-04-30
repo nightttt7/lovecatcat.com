@@ -17,6 +17,12 @@ export const formatDate = (value: string | null, lang: Lang = "zh"): string => {
     return `${year}-${month}-${day}`;
   }
 
+  if (lang === "no") {
+    return new Intl.DateTimeFormat("nb-NO", {
+      dateStyle: "medium"
+    }).format(date);
+  }
+
   return new Intl.DateTimeFormat("zh-CN", {
     dateStyle: "medium"
   }).format(date);

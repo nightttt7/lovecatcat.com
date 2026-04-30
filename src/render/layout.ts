@@ -1,7 +1,7 @@
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import type { SiteConfig } from "../config";
-import { t, type Lang } from "../utils/i18n";
+import { languageLabels, siteLanguages, t, type Lang } from "../utils/i18n";
 import { postRoutes } from "../utils/routes";
 
 type LayoutUser = {
@@ -74,6 +74,12 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
         { href: "/login", label: t("login", lang), active: activePath === "/login" },
         { href: "/signup", label: t("signup", lang), active: activePath === "/signup" }
       ];
+  const languageLinks = siteLanguages.map((language) => ({
+    href: `/api/lang?to=${language}`,
+    label: languageLabels[language],
+    active: lang === language
+  }));
+  const currentLanguageLabel = languageLabels[lang];
   const mobileMenuLinks = [
     ...navLinks.map((link) => ({
       href: link.href,
@@ -85,11 +91,6 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
       label: link.label,
       active: link.active
     })),
-    {
-      href: `/api/lang?to=${t("switchLangTo", lang)}`,
-      label: t("switchLang", lang),
-      active: false
-    }
   ];
 
   return html`
@@ -206,6 +207,44 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
           }
 
           .mobile-menu-link[aria-current="page"] {
+            font-weight: var(--base-text-weight-semibold, 600);
+          }
+
+          .language-menu-summary {
+            list-style: none;
+            cursor: pointer;
+          }
+
+          .language-menu-summary::-webkit-details-marker {
+            display: none;
+          }
+
+          .language-menu-panel {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 0.5rem);
+            min-width: 10rem;
+            z-index: 110;
+          }
+
+          .language-menu-link {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            color: var(--fgColor-default);
+            text-decoration: none;
+            white-space: nowrap;
+          }
+
+          .language-menu-link + .language-menu-link {
+            border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+          }
+
+          .language-menu-link:hover {
+            background: var(--bgColor-muted);
+            text-decoration: none;
+          }
+
+          .language-menu-link[aria-current="true"] {
             font-weight: var(--base-text-weight-semibold, 600);
           }
 
@@ -521,7 +560,16 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
                     `
               )}
               <div class="Header-item">
-                <a href="/api/lang?to=${t("switchLangTo", lang)}" class="Header-link">${t("switchLang", lang)}</a>
+                <details class="details-reset position-relative">
+                  <summary class="Header-link language-menu-summary" aria-label="${t("languageSelectorLabel", lang)}">${t("languageSelectorLabel", lang)}: ${currentLanguageLabel} ▾</summary>
+                  <div class="language-menu-panel Box color-bg-default color-shadow-large overflow-hidden">
+                    ${languageLinks.map((link) =>
+                      link.active
+                        ? html`<a href=${link.href} class="language-menu-link" aria-current="true">${link.label}</a>`
+                        : html`<a href=${link.href} class="language-menu-link">${link.label}</a>`
+                    )}
+                  </div>
+                </details>
               </div>
             </div>
           </div>
@@ -551,6 +599,12 @@ export const renderLayout = ({ title, description, site, isAdmin, currentUser = 
                     ${mobileMenuLinks.map((link) =>
                       link.active
                         ? html`<a href=${link.href} class="mobile-menu-link" aria-current="page">${link.label}</a>`
+                        : html`<a href=${link.href} class="mobile-menu-link">${link.label}</a>`
+                    )}
+                    <div class="mobile-menu-link text-gray" aria-hidden="true">${t("languageSelectorLabel", lang)}: ${currentLanguageLabel}</div>
+                    ${languageLinks.map((link) =>
+                      link.active
+                        ? html`<a href=${link.href} class="mobile-menu-link text-bold" aria-current="true">${link.label}</a>`
                         : html`<a href=${link.href} class="mobile-menu-link">${link.label}</a>`
                     )}
                   </div>

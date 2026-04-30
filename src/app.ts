@@ -12,7 +12,7 @@ import { renderLayout } from "./render/layout";
 import { canDeleteComment, canDeletePost, canEditOwnPost, canManageUser, hasAccess, type AccessUser } from "./utils/access";
 import { createSessionToken, hashPassword, hashSessionToken, normalizeEmail, verifyPassword } from "./utils/auth";
 import { formatDate } from "./utils/date";
-import { isLang, siteLanguages, t, type Lang } from "./utils/i18n";
+import { isLang, isTranslationLang, t, translationLanguages, type Lang, type TranslationLang } from "./utils/i18n";
 import { buildTagValue, DEFAULT_POST_TAG, displayTagValues, isDraftTag, normalizeTagFilterValue, tagInputValue } from "./utils/post-tags";
 import { postRoutePatterns, postRoutes } from "./utils/routes";
 import { detectPostSourceLanguage, getTranslationTargetLanguages, hashPostTranslationSource, normalizeSelectedSourceLanguage } from "./translation/content";
@@ -106,6 +106,10 @@ const getRawFormValue = (body: FormBody, key: string) => {
   return "";
 };
 
+const hasFormValue = (body: FormBody, key: string) => {
+  return Object.prototype.hasOwnProperty.call(body, key);
+};
+
 const isChecked = (body: FormBody, key: string) => {
   return getRawFormValue(body, key) !== "";
 };
@@ -114,24 +118,89 @@ const getPostVisibilityValue = (body: FormBody) => {
   return getTrimmedFormValue(body, "visibility") === "private" ? "private" : "public";
 };
 
-const getSourceLanguageValue = (body: FormBody, detectedLanguage: Lang | null, fallbackLanguage: Lang) => {
+const getDefaultSourceLanguage = (lang: Lang): TranslationLang => {
+  return lang === "en" ? "en" : "zh";
+};
+
+const getSourceLanguageValue = (body: FormBody, detectedLanguage: TranslationLang | null, fallbackLanguage: TranslationLang) => {
   return normalizeSelectedSourceLanguage(getTrimmedFormValue(body, "sourceLang"), detectedLanguage, fallbackLanguage);
 };
 
-const getLanguageLabelKey = (value: Lang) => {
+const getLanguageLabelKey = (value: TranslationLang) => {
   return value === "zh" ? "postSourceLanguageZh" : "postSourceLanguageEn";
 };
 
-const getLanguageLabel = (value: Lang | null, lang: Lang) => {
+const getLanguageLabel = (value: TranslationLang | null, lang: Lang) => {
   return value ? t(getLanguageLabelKey(value), lang) : t("postSourceLanguageUndetermined", lang);
 };
 
-const getTranslationTargetLanguage = (sourceLang: Lang) => {
+const getTranslationTargetLanguage = (sourceLang: TranslationLang) => {
   return getTranslationTargetLanguages(sourceLang)[0] ?? (sourceLang === "zh" ? "en" : "zh");
 };
 
-const getStoredSourceLanguage = (value: string | null | undefined, fallbackLanguage: Lang) => {
-  return value && isLang(value) ? value : fallbackLanguage;
+const getTranslationEditPath = (postId: number, targetLang?: TranslationLang | null, notice?: string) => {
+  const params = new URLSearchParams();
+
+  if (targetLang) {
+    params.set("lang", targetLang);
+  }
+
+  if (notice) {
+    params.set("translation", notice);
+  }
+
+  const query = params.toString();
+  return `${postRoutes.translationEdit(postId)}${query ? `?${query}` : ""}`;
+};
+
+const getTranslationActionPath = (path: string, targetLang?: TranslationLang | null) => {
+  if (!targetLang) {
+    return path;
+  }
+
+  return `${path}?lang=${encodeURIComponent(targetLang)}`;
+};
+
+const getRequestedTranslationLanguage = (value: string | undefined) => {
+  return value && isTranslationLang(value) ? value : null;
+};
+
+const prunePostTranslationsForSourceLanguage = async (db: BlogDb, postId: number, sourceLang: TranslationLang) => {
+  const targetLanguages = new Set(getTranslationTargetLanguages(sourceLang));
+  const translations = await db.listPostTranslations(postId);
+
+  await Promise.all(
+    translations
+      .filter((translation) => !targetLanguages.has(translation.lang as TranslationLang))
+      .map((translation) => db.deletePostTranslation(postId, translation.lang))
+  );
+};
+
+const updatePostSourceLanguage = async (
+  db: BlogDb,
+  post: PostDetailRow,
+  sourceLang: TranslationLang,
+  { sourceLangManual }: { sourceLangManual?: boolean } = {}
+) => {
+  const manualValue = sourceLangManual === undefined ? undefined : sourceLangManual;
+
+  if (post.source_lang !== sourceLang || (manualValue !== undefined && Boolean(post.source_lang_manual) !== manualValue)) {
+    await db.updatePost({
+      id: post.id,
+      title: post.title ?? null,
+      body: post.body ?? "",
+      sourceLang,
+      sourceLangManual: manualValue,
+      tag: post.tag ?? DEFAULT_POST_TAG,
+      isPrivate: Boolean(post.is_private)
+    });
+  }
+
+  await prunePostTranslationsForSourceLanguage(db, post.id, sourceLang);
+};
+
+const getStoredSourceLanguage = (value: string | null | undefined, fallbackLanguage: TranslationLang) => {
+  return value && isTranslationLang(value) ? value : fallbackLanguage;
 };
 
 const getTranslationStatusLabelKey = (status: PostTranslationStatus | null | undefined) => {
@@ -153,32 +222,8 @@ const getTranslationStatusLabelKey = (status: PostTranslationStatus | null | und
   }
 };
 
-const hasTranslationSourceChanged = ({
-  post,
-  title,
-  body,
-  sourceLang,
-  fallbackLanguage
-}: {
-  post: PostDetailRow;
-  title: string | null;
-  body: string;
-  sourceLang: Lang;
-  fallbackLanguage: Lang;
-}) => {
-  const currentSourceLang = getStoredSourceLanguage(post.source_lang, fallbackLanguage);
-  const currentSourceHash = hashPostTranslationSource({
-    title: post.title ?? null,
-    body: post.body ?? "",
-    sourceLang: currentSourceLang
-  });
-  const nextSourceHash = hashPostTranslationSource({
-    title,
-    body,
-    sourceLang
-  });
-
-  return currentSourceHash !== nextSourceHash;
+const shouldShowTranslationRefreshHint = (status: PostTranslationStatus | null | undefined) => {
+  return status === "pending" || status === "processing";
 };
 
 const formatTranslatedPostTitle = ({
@@ -202,6 +247,7 @@ const syncPostTranslationState = async <TBindings extends Record<string, unknown
   c,
   db,
   postId,
+  authorId,
   title,
   body,
   sourceLang,
@@ -211,14 +257,17 @@ const syncPostTranslationState = async <TBindings extends Record<string, unknown
   c: Context<AppEnv<TBindings>>;
   db: BlogDb;
   postId: number;
+  authorId: number | null;
   title: string | null;
   body: string;
-  sourceLang: Lang;
+  sourceLang: TranslationLang;
   trigger: TranslationJobTrigger;
   options: AppOptions<TBindings>;
 }) => {
   const sourceHash = hashPostTranslationSource({ title, body, sourceLang });
   const jobs: TranslationJobMessage[] = [];
+
+  await prunePostTranslationsForSourceLanguage(db, postId, sourceLang);
 
   for (const targetLang of getTranslationTargetLanguages(sourceLang)) {
     const existingTranslation = await db.getPostTranslation(postId, targetLang);
@@ -243,6 +292,7 @@ const syncPostTranslationState = async <TBindings extends Record<string, unknown
 
     jobs.push({
       postId,
+      authorId,
       sourceLang,
       targetLang,
       sourceHash,
@@ -255,45 +305,6 @@ const syncPostTranslationState = async <TBindings extends Record<string, unknown
   }
 
   return jobs.length;
-};
-
-const markPostTranslationsStale = async ({
-  db,
-  postId,
-  title,
-  body,
-  sourceLang
-}: {
-  db: BlogDb;
-  postId: number;
-  title: string | null;
-  body: string;
-  sourceLang: Lang;
-}) => {
-  const sourceHash = hashPostTranslationSource({ title, body, sourceLang });
-  const translations = await db.listPostTranslations(postId);
-
-  for (const translation of translations) {
-    if (translation.lang === sourceLang || translation.source_hash === sourceHash) {
-      continue;
-    }
-
-    const hasTranslatedContent = Boolean(translation.translated_title?.trim() || translation.translated_body?.trim());
-
-    await db.upsertPostTranslation({
-      postId,
-      lang: translation.lang,
-      translatedTitle: translation.translated_title,
-      translatedBody: translation.translated_body,
-      status: hasTranslatedContent ? "stale" : "pending",
-      sourceHash,
-      provider: translation.provider,
-      errorMessage: null,
-      isMachineTranslation: translation.is_machine_translation !== 0,
-      isPublished: translation.is_published === 1,
-      translatedAt: translation.translated_at
-    });
-  }
 };
 
 const getRequestProtocol = <TBindings extends Record<string, unknown>>(c: Context<AppEnv<TBindings>>) => {
@@ -988,6 +999,79 @@ const renderUserCards = (
   })}`;
 };
 
+type AdminPostTranslationSummary = {
+  post: PostListRow;
+  translations: PostTranslationRow[];
+};
+
+const renderTranslationSummary = (postId: number, translations: PostTranslationRow[], lang: Lang, published: boolean) => {
+  const matchingTranslations = translations.filter((translation) => {
+    const isPublished = getPostTranslationUiState(translation) === "published";
+    return published ? isPublished : !isPublished;
+  });
+
+  if (matchingTranslations.length === 0) {
+    return t("noTranslations", lang);
+  }
+
+  return html`${matchingTranslations.map((translation, index) => {
+    const translationLang = isTranslationLang(translation.lang) ? translation.lang : null;
+    const languageLabel = getLanguageLabel(translationLang, lang);
+    return html`${index > 0 ? ", " : ""}<a href="${getTranslationEditPath(postId, translationLang)}" class="d-inline-block mr-1 color-fg-default">${languageLabel}</a>`;
+  })}`;
+};
+
+const renderAdminSourceLanguageControls = (post: PostListRow, sourceLang: TranslationLang, lang: Lang) => {
+  const actionPath = postRoutes.adminSourceLanguage(post.id);
+
+  return html`
+    <form method="post" action="${actionPath}">
+      <select name="sourceLang" class="form-select" aria-label="${t("adminPostSourceLanguage", lang)}" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
+        ${translationLanguages.map((language) => html`<option value="${language}" ${sourceLang === language ? "selected" : ""}>${t(getLanguageLabelKey(language), lang)}</option>`) }
+      </select>
+    </form>
+  `;
+};
+
+const renderAdminPostTranslationOverview = (items: AdminPostTranslationSummary[], lang: Lang) => {
+  if (items.length === 0) {
+    return renderNotice(t("noManagedPosts", lang));
+  }
+
+  return html`
+    <div class="Box box-shadow overflow-auto">
+      <table class="width-full">
+        <thead>
+          <tr class="border-bottom color-bg-subtle">
+            <th class="p-2 text-left">${t("postTitleLabel", lang)}</th>
+            <th class="p-2 text-left">${t("adminPostSourceLanguage", lang)}</th>
+            <th class="p-2 text-left">${t("adminPostUnpublishedTranslations", lang)}</th>
+            <th class="p-2 text-left">${t("adminPostPublishedTranslations", lang)}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map(({ post, translations }) => {
+            const sourceLang = getStoredSourceLanguage(post.source_lang, getDefaultSourceLanguage(lang));
+
+            return html`
+              <tr class="border-bottom">
+                <td class="p-2">
+                  <a href="${postRoutes.original(post.id)}" class="text-bold color-fg-default action-card-title-link">${post.title || t("untitled", lang)}</a>
+                  ${post.is_draft ? html`<span class="Label ml-2">${t("draft", lang)}</span>` : html``}
+                  ${post.is_private ? html`<span class="Label ml-2">${t("privatePostBadge", lang)}</span>` : html``}
+                </td>
+                <td class="p-2">${renderAdminSourceLanguageControls(post, sourceLang, lang)}</td>
+                <td class="p-2">${renderTranslationSummary(post.id, translations, lang, false)}</td>
+                <td class="p-2">${renderTranslationSummary(post.id, translations, lang, true)}</td>
+              </tr>
+            `;
+          })}
+        </tbody>
+      </table>
+    </div>
+  `;
+};
+
 type PostViewMode = "original" | "translation";
 type PostActionSurface = PostViewMode | "originalEdit" | "translationEdit";
 type PostTranslationUiState = "missing" | "unpublished" | "published";
@@ -1017,11 +1101,11 @@ const resolveDefaultPostDetailPath = ({
 }: {
   post: PostDetailRow;
   accessUser: AccessUser;
-  sourceLang: Lang;
+  sourceLang: TranslationLang;
   lang: Lang;
   translationState: PostTranslationUiState;
 }) => {
-  if (!isPostAuthor(accessUser, post.author_id) && sourceLang !== lang && translationState === "published") {
+  if (!isPostAuthor(accessUser, post.author_id) && lang === getTranslationTargetLanguage(sourceLang) && translationState === "published") {
     return postRoutes.translation(post.id);
   }
 
@@ -1037,7 +1121,7 @@ const renderPostDeleteAction = (postId: number, lang: Lang, redirectTo: string) 
   });
 };
 
-const renderGenerateTranslationAction = (postId: number, sourceLang: Lang, lang: Lang) => {
+const renderGenerateTranslationAction = (postId: number, sourceLang: TranslationLang, lang: Lang) => {
   return html`
     <form method="post" action="${postRoutes.translationGenerate(postId)}" class="mb-2 mr-2">
       <input type="hidden" name="sourceLang" value="${sourceLang}" />
@@ -1058,7 +1142,7 @@ const renderPostAdminActions = ({
   post: PostDetailRow;
   lang: Lang;
   accessUser: AccessUser;
-  sourceLang: Lang;
+  sourceLang: TranslationLang;
   translationState: PostTranslationUiState;
   surface: PostActionSurface;
   redirectTo: string;
@@ -1146,7 +1230,7 @@ const renderPostPageBody = ({
   accessUser: AccessUser;
   renderedTitle: string | null;
   renderedBody: string;
-  sourceLang: Lang;
+  sourceLang: TranslationLang;
   translationState: PostTranslationUiState;
   viewMode: PostViewMode;
   currentPath: string;
@@ -1368,6 +1452,36 @@ const getTranslationPageNotice = (value: string | undefined, lang: Lang) => {
   }
 };
 
+const getAdminPageNotice = (value: string | undefined, lang: Lang) => {
+  switch (value) {
+    case "source-language-detected":
+      return t("adminPostSourceLanguageDetectAllNotice", lang);
+    default:
+      return null;
+  }
+};
+const isTranslationSourceOutdated = ({
+  post,
+  sourceLang,
+  translation
+}: {
+  post: PostDetailRow;
+  sourceLang: TranslationLang;
+  translation: PostTranslationRow | null;
+}) => {
+  if (!translation?.source_hash) {
+    return false;
+  }
+
+  const currentSourceHash = hashPostTranslationSource({
+    title: post.title ?? null,
+    body: post.body ?? "",
+    sourceLang
+  });
+
+  return translation.source_hash !== currentSourceHash;
+};
+
 const renderEditPostPage = <TBindings extends Record<string, unknown>>({
   c,
   options,
@@ -1388,7 +1502,7 @@ const renderEditPostPage = <TBindings extends Record<string, unknown>>({
   titleValue: string;
   tagValue: string;
   bodyValue: string;
-  selectedSourceLang: Lang;
+  selectedSourceLang: TranslationLang;
   translationState: PostTranslationUiState;
   status?: 200 | 400 | 403;
   error?: string;
@@ -1450,8 +1564,8 @@ const renderPostTranslationPage = <TBindings extends Record<string, unknown>>({
   c: Context<AppEnv<TBindings>>;
   options: AppOptions<TBindings>;
   post: PostDetailRow;
-  selectedSourceLang: Lang;
-  detectedSourceLang: Lang | null;
+  selectedSourceLang: TranslationLang;
+  detectedSourceLang: TranslationLang | null;
   translation: PostTranslationRow | null;
   translatedTitleValue: string;
   translatedBodyValue: string;
@@ -1462,11 +1576,13 @@ const renderPostTranslationPage = <TBindings extends Record<string, unknown>>({
   const site = options.getSite(c);
   const lang = c.get("lang");
   const targetLang = getTranslationTargetLanguage(selectedSourceLang);
+  const translationEditPath = getTranslationEditPath(post.id, targetLang);
   const actionLabel = translation ? t("translationRegenerateAction", lang) : t("translationGenerateAction", lang);
   const configuredModel = options.getTranslationModel?.(c)?.trim() || DEFAULT_OPENAI_TRANSLATION_MODEL;
   const translationState = getPostTranslationUiState(translation);
   const isPublished = translation?.is_published === 1;
   const publishStatusLabelKey = isPublished ? "translationPublishStatusPublished" : "translationPublishStatusUnpublished";
+  const sourceOutdated = isTranslationSourceOutdated({ post, sourceLang: selectedSourceLang, translation });
 
   return c.html(
     renderLayout({
@@ -1491,19 +1607,20 @@ const renderPostTranslationPage = <TBindings extends Record<string, unknown>>({
             sourceLang: selectedSourceLang,
             translationState,
             surface: "translationEdit",
-            redirectTo: postRoutes.translationEdit(post.id)
+            redirectTo: translationEditPath
           })}
         </div>
         ${notice ? renderTranslationMessage(notice, "success") : html``}
         ${error ? renderTranslationMessage(error, "warn") : html``}
+        ${sourceOutdated ? renderTranslationMessage(t("translationSourceOutdatedNotice", lang), "warn") : html``}
         <div class="Box box-shadow">
           <div class="Box-body">
             <p class="f6 text-gray mt-0 mb-3">${t("translationManagerHint", lang)}</p>
-            <form method="post" action="${postRoutes.translationEdit(post.id)}">
+            <form method="post" action="${translationEditPath}">
               <div class="mb-3">
                 <label class="d-block text-bold mb-2" for="translation-source-lang">${t("postSourceLanguageLabel", lang)}</label>
                 <select id="translation-source-lang" name="sourceLang" class="form-select width-full">
-                  ${siteLanguages.map((language) => html`<option value="${language}" ${selectedSourceLang === language ? "selected" : ""}>${t(getLanguageLabelKey(language), lang)}</option>`) }
+                  ${translationLanguages.map((language) => html`<option value="${language}" ${selectedSourceLang === language ? "selected" : ""}>${t(getLanguageLabelKey(language), lang)}</option>`) }
                 </select>
                 <p class="f6 text-gray mt-2 mb-0">${t("translationSourceLanguageHint", lang)} ${t("postSourceLanguageDetected", lang)}: ${getLanguageLabel(detectedSourceLang, lang)}</p>
               </div>
@@ -1514,7 +1631,16 @@ const renderPostTranslationPage = <TBindings extends Record<string, unknown>>({
               <div class="mb-3">
                 <p class="text-bold mb-1">${t("translationStatusLabel", lang)}</p>
                 <p class="mb-0">${t(getTranslationStatusLabelKey(translation?.status), lang)}</p>
+                ${shouldShowTranslationRefreshHint(translation?.status)
+                  ? html`<p class="f6 text-gray mt-1 mb-0">${t("translationPendingRefreshHint", lang)}</p>`
+                  : html``}
               </div>
+              ${translation?.error_message
+                ? html`<div class="mb-3">
+                    <p class="text-bold mb-1">${t("translationErrorLabel", lang)}</p>
+                    <p class="mb-0 color-fg-danger text-mono">${translation.error_message}</p>
+                  </div>`
+                : html``}
               <div class="mb-3">
                 <p class="text-bold mb-1">${t("translationPublishStatusLabel", lang)}</p>
                 <p class="mb-0">${t(publishStatusLabelKey, lang)}</p>
@@ -1533,7 +1659,12 @@ const renderPostTranslationPage = <TBindings extends Record<string, unknown>>({
                 <button type="submit" name="translationAction" value="draft" class="btn mr-2 mb-2">${t("translationSaveDraftAction", lang)}</button>
                 <button type="submit" name="translationAction" value="publish" class="btn btn-primary mr-2 mb-2">${t("translationPublishAction", lang)}</button>
                 ${isPublished
-                  ? html`<button type="submit" formaction="${postRoutes.translationUnpublish(post.id)}" formmethod="post" formnovalidate class="btn mr-2 mb-2">${t("translationUnpublishAction", lang)}</button>`
+                  ? html`
+                      <button type="submit" formaction="${getTranslationActionPath(postRoutes.translationUnpublish(post.id), targetLang)}" formmethod="post" formnovalidate class="btn mr-2 mb-2">${t("translationUnpublishAction", lang)}</button>
+                    `
+                  : html``}
+                ${translation
+                  ? html`<button type="submit" formaction="${getTranslationActionPath(postRoutes.translationDelete(post.id), targetLang)}" formmethod="post" formnovalidate class="btn btn-danger mr-2 mb-2">${t("translationDeleteAction", lang)}</button>`
                   : html``}
               </div>
               ${renderMarkdownEditor({
@@ -1567,7 +1698,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     c.set("db", db);
 
     let lang = getCookie(c, "lang") as Lang | undefined;
-    if (lang !== "en" && lang !== "zh") {
+    if (!lang || !isLang(lang)) {
       lang = "zh";
     }
     c.set("lang", lang);
@@ -1619,7 +1750,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
 
   app.get("/api/lang", (c) => {
     const to = c.req.query("to");
-    if (to === "en" || to === "zh") {
+    if (to && isLang(to)) {
       setCookie(c, "lang", to, { path: "/", maxAge: 31536000 });
     }
     return c.redirect(getRefererReturnPath(c, "/", { allowAuthPages: true }));
@@ -1920,8 +2051,8 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     ]);
     const postTitleDisplays = await Promise.all(
       posts.map(async (post) => {
-        const sourceLang = post.source_lang && isLang(post.source_lang) ? post.source_lang : "zh";
-        if (sourceLang === lang) {
+        const sourceLang = post.source_lang && isTranslationLang(post.source_lang) ? post.source_lang : "zh";
+        if (post.author_id === viewerId || !isTranslationLang(lang) || sourceLang === lang) {
           return { postId: post.id, title: post.title };
         }
 
@@ -2077,7 +2208,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       return c.notFound();
     }
 
-    const sourceLang = post.source_lang && isLang(post.source_lang) ? post.source_lang : "zh";
+    const sourceLang = post.source_lang && isTranslationLang(post.source_lang) ? post.source_lang : "zh";
     const targetLang = getTranslationTargetLanguage(sourceLang);
     const postTranslation = await db.getPostTranslation(postId, targetLang);
     const translationState = getPostTranslationUiState(postTranslation);
@@ -2098,7 +2229,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const comments = await db.listComments(postId);
     const accessUser = getAccessUser(c);
     const currentPath = viewMode === "translation" ? postRoutes.translation(post.id) : postRoutes.original(post.id);
-    const shouldShowTranslationNotice = sourceLang !== lang && translationState === "published";
+    const shouldShowTranslationNotice = lang === targetLang && translationState === "published";
     const translationNotice = shouldShowTranslationNotice
       ? html`
           <div class="flash flash-warn mb-3">
@@ -2159,7 +2290,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       return c.notFound();
     }
 
-    const sourceLang = post.source_lang && isLang(post.source_lang) ? post.source_lang : "zh";
+    const sourceLang = post.source_lang && isTranslationLang(post.source_lang) ? post.source_lang : "zh";
     const translation = await db.getPostTranslation(postId, getTranslationTargetLanguage(sourceLang));
     const accessUser = getAccessUser(c);
 
@@ -2200,7 +2331,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const body = (await c.req.parseBody()) as FormBody;
     const commentValue = getTrimmedFormValue(body, "body");
     const redirectTo = sanitizeNextPath(getTrimmedFormValue(body, "redirectTo"), postRoutes.original(postId));
-    const sourceLang = post.source_lang && isLang(post.source_lang) ? post.source_lang : "zh";
+    const sourceLang = post.source_lang && isTranslationLang(post.source_lang) ? post.source_lang : "zh";
     const postTranslation = await db.getPostTranslation(postId, getTranslationTargetLanguage(sourceLang));
     const translationState = getPostTranslationUiState(postTranslation);
 
@@ -2393,7 +2524,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const tagValue = getTrimmedFormValue(body, "tag");
     const postBodyValue = getRawFormValue(body, "body").trim();
     const detectedSourceLang = detectPostSourceLanguage(titleValue, postBodyValue);
-    const sourceLang = getSourceLanguageValue(body, detectedSourceLang, lang);
+    const sourceLang = getSourceLanguageValue(body, detectedSourceLang, getDefaultSourceLanguage(lang));
     const draft = isChecked(body, "isDraft");
     const visibility = getPostVisibilityValue(body);
     const error = !tagValue ? t("postTagRequired", lang) : !postBodyValue ? t("postBodyRequired", lang) : null;
@@ -2479,7 +2610,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
 
     const lang = c.get("lang");
     const detectedSourceLang = detectPostSourceLanguage(post.title ?? "", post.body ?? "");
-    const selectedSourceLang = getStoredSourceLanguage(post.source_lang, lang);
+    const selectedSourceLang = getStoredSourceLanguage(post.source_lang, getDefaultSourceLanguage(lang));
     const translation = await db.getPostTranslation(post.id, getTranslationTargetLanguage(selectedSourceLang));
 
     return renderEditPostPage({
@@ -2539,8 +2670,9 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const tagValue = getTrimmedFormValue(body, "tag");
     const postBodyValue = getRawFormValue(body, "body").trim();
     const detectedSourceLang = detectPostSourceLanguage(titleValue, postBodyValue);
-    const fallbackSourceLang = getStoredSourceLanguage(post.source_lang, lang);
-    const sourceLang = getSourceLanguageValue(body, detectedSourceLang, fallbackSourceLang);
+    const storedSourceLang = post.source_lang && isTranslationLang(post.source_lang) ? post.source_lang : null;
+    const fallbackSourceLang = storedSourceLang ?? detectedSourceLang ?? getDefaultSourceLanguage(lang);
+    const sourceLang = hasFormValue(body, "sourceLang") ? getSourceLanguageValue(body, detectedSourceLang, fallbackSourceLang) : fallbackSourceLang;
     const draft = isChecked(body, "isDraft");
     const visibility = getPostVisibilityValue(body);
     const error = !tagValue ? t("postTagRequired", lang) : !postBodyValue ? t("postBodyRequired", lang) : null;
@@ -2562,14 +2694,6 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       });
     }
 
-    const translationSourceChanged = hasTranslationSourceChanged({
-      post,
-      title: titleValue || null,
-      body: postBodyValue,
-      sourceLang,
-      fallbackLanguage: lang
-    });
-
     await db.updatePost({
       id: postId,
       title: titleValue || null,
@@ -2579,15 +2703,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       isPrivate: visibility === "private"
     });
 
-    await markPostTranslationsStale({
-      db,
-      postId,
-      title: titleValue || null,
-      body: postBodyValue,
-      sourceLang
-    });
-
-    return c.redirect(translationSourceChanged ? postRoutes.translationEdit(postId) : postRoutes.original(postId));
+    return c.redirect(postRoutes.original(postId));
   });
 
   app.get(postRoutePatterns.translationEdit, async (c) => {
@@ -2598,7 +2714,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, postRoutes.translationEdit(postId));
+      return redirectToLogin(c, getTranslationEditPath(postId, getRequestedTranslationLanguage(c.req.query("lang"))));
     }
 
     const db = c.get("db");
@@ -2629,8 +2745,10 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
 
     const lang = c.get("lang");
     const detectedSourceLang = detectPostSourceLanguage(post.title ?? "", post.body ?? "");
-    const selectedSourceLang = getStoredSourceLanguage(post.source_lang, lang);
-    let translation = await db.getPostTranslation(post.id, getTranslationTargetLanguage(selectedSourceLang));
+    const requestedTargetLang = getRequestedTranslationLanguage(c.req.query("lang"));
+    const selectedSourceLang = requestedTargetLang ? getTranslationTargetLanguage(requestedTargetLang) : getStoredSourceLanguage(post.source_lang, getDefaultSourceLanguage(lang));
+    const targetLang = requestedTargetLang ?? getTranslationTargetLanguage(selectedSourceLang);
+    let translation = await db.getPostTranslation(post.id, targetLang);
 
     if (!translation) {
       return c.notFound();
@@ -2643,6 +2761,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         c,
         db,
         postId: post.id,
+        authorId: post.author_id,
         title: post.title ?? null,
         body: post.body ?? "",
         sourceLang: selectedSourceLang,
@@ -2675,7 +2794,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, postRoutes.translationEdit(postId));
+      return redirectToLogin(c, getTranslationEditPath(postId, getRequestedTranslationLanguage(c.req.query("lang"))));
     }
 
     const db = c.get("db");
@@ -2705,11 +2824,11 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     const lang = c.get("lang");
-    const currentSourceLang = getStoredSourceLanguage(post.source_lang, lang);
+    const currentSourceLang = getStoredSourceLanguage(post.source_lang, getDefaultSourceLanguage(lang));
     const detectedSourceLang = detectPostSourceLanguage(post.title ?? "", post.body ?? "");
     const body = (await c.req.parseBody()) as FormBody;
     const requestedSourceLang = getTrimmedFormValue(body, "sourceLang");
-    const sourceLang = requestedSourceLang && isLang(requestedSourceLang) ? requestedSourceLang : detectedSourceLang;
+    const sourceLang = requestedSourceLang && isTranslationLang(requestedSourceLang) ? requestedSourceLang : detectedSourceLang;
 
     if (!sourceLang) {
       const translation = await db.getPostTranslation(postId, getTranslationTargetLanguage(currentSourceLang));
@@ -2727,21 +2846,13 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       });
     }
 
-    if (sourceLang !== currentSourceLang) {
-      await db.updatePost({
-        id: postId,
-        title: post.title ?? null,
-        body: post.body ?? "",
-        sourceLang,
-        tag: post.tag ?? DEFAULT_POST_TAG,
-        isPrivate: Boolean(post.is_private)
-      });
-    }
+    await updatePostSourceLanguage(db, post, sourceLang, { sourceLangManual: true });
 
     const queuedCount = await syncPostTranslationState({
       c,
       db,
       postId,
+      authorId: post.author_id,
       title: post.title ?? null,
       body: post.body ?? "",
       sourceLang,
@@ -2749,7 +2860,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       options
     });
 
-    return c.redirect(`${postRoutes.translationEdit(postId)}?translation=${queuedCount > 0 ? "queued" : "ready"}`);
+    return c.redirect(getTranslationEditPath(postId, getTranslationTargetLanguage(sourceLang), queuedCount > 0 ? "queued" : "ready"));
   });
 
   app.post(postRoutePatterns.translationEdit, async (c) => {
@@ -2760,7 +2871,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, postRoutes.translationEdit(postId));
+      return redirectToLogin(c, getTranslationEditPath(postId, getRequestedTranslationLanguage(c.req.query("lang"))));
     }
 
     const db = c.get("db");
@@ -2792,7 +2903,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const lang = c.get("lang");
     const detectedSourceLang = detectPostSourceLanguage(post.title ?? "", post.body ?? "");
     const body = (await c.req.parseBody()) as FormBody;
-    const currentSourceLang = getStoredSourceLanguage(post.source_lang, lang);
+    const currentSourceLang = getStoredSourceLanguage(post.source_lang, getDefaultSourceLanguage(lang));
     const sourceLang = getSourceLanguageValue(body, detectedSourceLang, currentSourceLang);
     const targetLang = getTranslationTargetLanguage(sourceLang);
     const existingTranslation = await db.getPostTranslation(postId, targetLang);
@@ -2802,8 +2913,12 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     const translationAction = getTrimmedFormValue(body, "translationAction") === "draft" ? "draft" : "publish";
-    const translatedTitle = getTrimmedFormValue(body, "translatedTitle") || null;
-    const translatedBody = getRawFormValue(body, "translatedBody").trim();
+    const translatedTitle = hasFormValue(body, "translatedTitle")
+      ? getTrimmedFormValue(body, "translatedTitle") || null
+      : existingTranslation.translated_title ?? null;
+    const translatedBody = hasFormValue(body, "translatedBody")
+      ? getRawFormValue(body, "translatedBody").trim()
+      : existingTranslation.translated_body?.trim() ?? "";
 
     if (translationAction === "publish" && !translatedBody) {
       return renderPostTranslationPage({
@@ -2826,16 +2941,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       });
     }
 
-    if (sourceLang !== currentSourceLang) {
-      await db.updatePost({
-        id: postId,
-        title: post.title ?? null,
-        body: post.body ?? "",
-        sourceLang,
-        tag: post.tag ?? DEFAULT_POST_TAG,
-        isPrivate: Boolean(post.is_private)
-      });
-    }
+    await updatePostSourceLanguage(db, post, sourceLang, { sourceLangManual: true });
 
     await db.upsertPostTranslation({
       postId,
@@ -2858,7 +2964,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     if (translationAction === "publish") {
       return c.redirect(postRoutes.translation(postId));
     }
-    return c.redirect(`${postRoutes.translationEdit(postId)}?translation=draft`);
+    return c.redirect(getTranslationEditPath(postId, targetLang, "draft"));
   });
 
   app.post(postRoutePatterns.translationDelete, async (c) => {
@@ -2869,7 +2975,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, postRoutes.translationEdit(postId));
+      return redirectToLogin(c, getTranslationEditPath(postId, getRequestedTranslationLanguage(c.req.query("lang"))));
     }
 
     const db = c.get("db");
@@ -2899,8 +3005,8 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     const lang = c.get("lang");
-    const selectedSourceLang = getStoredSourceLanguage(post.source_lang, lang);
-    const targetLang = getTranslationTargetLanguage(selectedSourceLang);
+    const selectedSourceLang = getStoredSourceLanguage(post.source_lang, getDefaultSourceLanguage(lang));
+    const targetLang = getRequestedTranslationLanguage(c.req.query("lang")) ?? getTranslationTargetLanguage(selectedSourceLang);
     await db.deletePostTranslation(postId, targetLang);
 
     return c.redirect(postRoutes.original(postId));
@@ -2914,7 +3020,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     if (!hasAccess(accessUser, "admin")) {
-      return redirectToLogin(c, postRoutes.translationEdit(postId));
+      return redirectToLogin(c, getTranslationEditPath(postId, getRequestedTranslationLanguage(c.req.query("lang"))));
     }
 
     const db = c.get("db");
@@ -2944,8 +3050,8 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     }
 
     const lang = c.get("lang");
-    const selectedSourceLang = getStoredSourceLanguage(post.source_lang, lang);
-    const targetLang = getTranslationTargetLanguage(selectedSourceLang);
+    const selectedSourceLang = getStoredSourceLanguage(post.source_lang, getDefaultSourceLanguage(lang));
+    const targetLang = getRequestedTranslationLanguage(c.req.query("lang")) ?? getTranslationTargetLanguage(selectedSourceLang);
     const existingTranslation = await db.getPostTranslation(postId, targetLang);
 
     if (existingTranslation) {
@@ -2968,7 +3074,7 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
       });
     }
 
-    return c.redirect(`${postRoutes.translationEdit(postId)}?translation=unpublished`);
+    return c.redirect(getTranslationEditPath(postId, targetLang, "unpublished"));
   });
 
   app.get("/admin", async (c) => {
@@ -2982,9 +3088,20 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const lang = c.get("lang");
     const currentUser = c.get("currentUser");
     const adminEmails = getAdminEmailSet(c, options);
+    const adminNotice = getAdminPageNotice(c.req.query("adminNotice"), lang);
     const requestedUsersPage = getPositiveIntegerQueryValue(c.req.query("usersPage")) ?? 1;
     const requestedCommentsPage = getPositiveIntegerQueryValue(c.req.query("commentsPage")) ?? 1;
-    const [allComments, users] = await Promise.all([db.listAllComments(), db.listUsers()]);
+    const [allComments, users, ownPosts] = await Promise.all([
+      db.listAllComments(),
+      db.listUsers(),
+      currentUser ? db.listPostsByAuthor(currentUser.id, true, currentUser.id) : Promise.resolve([])
+    ]);
+    const ownPostTranslationSummaries = await Promise.all(
+      ownPosts.map(async (post) => ({
+        post,
+        translations: await db.listPostTranslations(post.id)
+      }))
+    );
     const totalUserPages = Math.max(1, Math.ceil(users.length / PAGE_SIZE));
     const totalCommentPages = Math.max(1, Math.ceil(allComments.length / PAGE_SIZE));
     const usersPage = Math.min(requestedUsersPage, totalUserPages);
@@ -3015,6 +3132,18 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
           <p class="mb-0 text-gray">${t("adminDashboardHint", lang)}</p>
         </div>
       </div>
+
+      ${adminNotice ? renderTranslationMessage(adminNotice, "success") : html``}
+
+      <section class="mb-4">
+        <div class="d-flex flex-justify-between flex-items-center flex-wrap mb-3">
+          <h2 class="h3 mb-0">${t("adminOwnPosts", lang)}</h2>
+          <form method="post" action="${postRoutes.adminSourceLanguageDetectAll()}" class="mb-0">
+            <button type="submit" class="btn btn-sm">${t("adminPostSourceLanguageDetectAllAction", lang)}</button>
+          </form>
+        </div>
+        ${renderAdminPostTranslationOverview(ownPostTranslationSummaries, lang)}
+      </section>
 
       <section class="mb-4">
         <div class="d-flex flex-justify-between flex-items-center mb-3">
@@ -3047,6 +3176,87 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
         activePath: "/admin"
       })
     );
+  });
+
+  app.post(postRoutePatterns.adminSourceLanguageDetectAll, async (c) => {
+    const accessUser = getAccessUser(c);
+    if (!hasAccess(accessUser, "admin")) {
+      return redirectToLogin(c, "/admin");
+    }
+
+    const db = c.get("db");
+    const currentUser = c.get("currentUser");
+    const posts = currentUser ? await db.listPostsByAuthor(currentUser.id, true, currentUser.id) : [];
+
+    for (const postSummary of posts) {
+      if (postSummary.source_lang_manual) {
+        continue;
+      }
+
+      const translations = await db.listPostTranslations(postSummary.id);
+      if (translations.length > 0) {
+        continue;
+      }
+
+      const post = await db.getPostById(postSummary.id, { includeDrafts: true, viewerId: currentUser?.id ?? null });
+      if (!post || !canEditOwnPost(accessUser, post.author_id)) {
+        continue;
+      }
+
+      const detectedSourceLang = detectPostSourceLanguage(post.title ?? "", post.body ?? "");
+      if (detectedSourceLang) {
+        await updatePostSourceLanguage(db, post, detectedSourceLang, { sourceLangManual: false });
+      }
+    }
+
+    return c.redirect("/admin?adminNotice=source-language-detected");
+  });
+
+  app.post(postRoutePatterns.adminSourceLanguage, async (c) => {
+    const accessUser = getAccessUser(c);
+    const postId = Number(c.req.param("id"));
+    if (Number.isNaN(postId)) {
+      return c.notFound();
+    }
+
+    if (!hasAccess(accessUser, "admin")) {
+      return redirectToLogin(c, "/admin");
+    }
+
+    const db = c.get("db");
+    const post = await db.getPostById(postId, { includeDrafts: true, viewerId: c.get("currentUser")?.id ?? null });
+    if (!post) {
+      return c.notFound();
+    }
+
+    if (!canEditOwnPost(accessUser, post.author_id)) {
+      const site = options.getSite(c);
+      const lang = c.get("lang");
+      return c.html(
+        renderLayout({
+          title: t("notAuthorized", lang),
+          description: site.siteDescription,
+          site,
+          isAdmin: c.get("isAdmin"),
+          currentUser: c.get("currentUser"),
+          lang,
+          aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
+          body: renderNotice(t("notAuthorized", lang)),
+          activePath: "/admin"
+        }),
+        403
+      );
+    }
+
+    const body = (await c.req.parseBody()) as FormBody;
+    const requestedSourceLang = getTrimmedFormValue(body, "sourceLang");
+    const currentSourceLang = getStoredSourceLanguage(post.source_lang, getDefaultSourceLanguage(c.get("lang")));
+    const nextSourceLang = requestedSourceLang && isTranslationLang(requestedSourceLang) ? requestedSourceLang : currentSourceLang;
+
+    await updatePostSourceLanguage(db, post, nextSourceLang, { sourceLangManual: true });
+
+    return c.redirect("/admin");
   });
 
   app.post(postRoutePatterns.delete, async (c) => {

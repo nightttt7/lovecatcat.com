@@ -38,7 +38,9 @@ export const postRoutes = {
   delete: (postId: number) => `/posts/${postId}/delete`,
   translationGenerate: (postId: number) => `/posts/${postId}/translation/generate`,
   translationDelete: (postId: number) => `/posts/${postId}/translation/delete`,
-  translationUnpublish: (postId: number) => `/posts/${postId}/translation/unpublish`
+  translationUnpublish: (postId: number) => `/posts/${postId}/translation/unpublish`,
+  adminSourceLanguageDetectAll: () => "/admin/posts/source-language/detect",
+  adminSourceLanguage: (postId: number) => `/admin/posts/${postId}/source-language`
 };
 
 export const postRoutePatterns = {
@@ -54,5 +56,7 @@ export const postRoutePatterns = {
   delete: "/posts/:id/delete",
   translationGenerate: "/posts/:id/translation/generate",
   translationDelete: "/posts/:id/translation/delete",
-  translationUnpublish: "/posts/:id/translation/unpublish"
+  translationUnpublish: "/posts/:id/translation/unpublish",
+  adminSourceLanguageDetectAll: "/admin/posts/source-language/detect",
+  adminSourceLanguage: "/admin/posts/:id/source-language"
 };

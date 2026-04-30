@@ -123,7 +123,7 @@ describe("createSqliteDb", () => {
     const postColumns = withRawDb(dbPath, (db) => db.prepare("PRAGMA table_info(posts)").all() as TableColumnRow[]);
     const commentRow = withRawDb(dbPath, (db) => db.prepare("SELECT user_id FROM comments LIMIT 1").get() as { user_id: number | null });
     const migratedPostRow = withRawDb(dbPath, (db) =>
-      db.prepare("SELECT tag, is_private FROM posts LIMIT 1").get() as { tag: string; is_private: number }
+      db.prepare("SELECT tag, is_private, source_lang_manual FROM posts LIMIT 1").get() as { tag: string; is_private: number; source_lang_manual: number }
     );
     const sessionsTable = withRawDb(dbPath, (db) =>
       db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get() as { name: string } | undefined
@@ -133,9 +133,11 @@ describe("createSqliteDb", () => {
     expect(commentColumns.some((column) => column.name === "user_id")).toBe(true);
     expect(postColumns.find((column) => column.name === "tag")?.notnull).toBe(1);
     expect(postColumns.some((column) => column.name === "is_private")).toBe(true);
+    expect(postColumns.some((column) => column.name === "source_lang_manual")).toBe(true);
     expect(commentRow.user_id).toBe(1);
     expect(migratedPostRow.tag).toBe("markdown test");
     expect(migratedPostRow.is_private).toBe(0);
+    expect(migratedPostRow.source_lang_manual).toBe(0);
     expect(sessionsTable?.name).toBe("sessions");
   });
 

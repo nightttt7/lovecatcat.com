@@ -18,8 +18,10 @@ describe("createOpenAiTranslationProvider", () => {
   it("translates title and body via two chat completions and returns provider metadata", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (_url, init) => {
       const body = JSON.parse((init?.body as string) ?? "{}") as {
+        temperature?: number;
         messages: Array<{ role: string; content: string }>;
       };
+      expect(body.temperature).toBeUndefined();
       const userContent = body.messages[1].content;
       const isTitle = !userContent.includes("\n");
       return buildOkResponse(isTitle ? "中文标题" : "中文正文 with `code`");
@@ -60,6 +62,42 @@ describe("createOpenAiTranslationProvider", () => {
     });
 
     expect(result.provider).toBe(`openai:${DEFAULT_OPENAI_TRANSLATION_MODEL}`);
+  });
+
+  it("trims model overrides and falls back when the override is blank", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (_url, init) => {
+      const body = JSON.parse((init?.body as string) ?? "{}") as { model?: string };
+      return buildOkResponse(body.model ?? "missing model");
+    });
+
+    const trimmedProvider = createOpenAiTranslationProvider({
+      apiKey: "sk-test",
+      model: "  gpt-5.5  ",
+      fetchImpl
+    });
+    const defaultProvider = createOpenAiTranslationProvider({
+      apiKey: "sk-test",
+      model: "   ",
+      fetchImpl
+    });
+
+    const trimmedResult = await trimmedProvider.translatePost({
+      sourceLang: "en",
+      targetLang: "zh",
+      title: null,
+      body: "Body"
+    });
+    const defaultResult = await defaultProvider.translatePost({
+      sourceLang: "en",
+      targetLang: "zh",
+      title: null,
+      body: "Body"
+    });
+
+    expect(trimmedResult.provider).toBe("openai:gpt-5.5");
+    expect(trimmedResult.translatedBody).toBe("gpt-5.5");
+    expect(defaultResult.provider).toBe(`openai:${DEFAULT_OPENAI_TRANSLATION_MODEL}`);
+    expect(defaultResult.translatedBody).toBe(DEFAULT_OPENAI_TRANSLATION_MODEL);
   });
 
   it("skips the title call when no title is provided", async () => {
