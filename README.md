@@ -66,16 +66,16 @@ If no special release branch is needed, keep working on `dev` for the next cycle
 
 ## Technology Stack
 
-- TypeScript 5.6
-- Hono 4.12
+- TypeScript 5.9
+- Hono 4.13
 - Node.js >= 20.18.1
 - Cloudflare Workers
 - Cloudflare D1
 - better-sqlite3 12.8
 - unified / remark / rehype
 - esbuild
-- Vitest 4.1
-- Wrangler 4.78
+- Vitest 5.0
+- Wrangler 4.130
 
 ## Architecture
 
