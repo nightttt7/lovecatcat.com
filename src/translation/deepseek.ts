@@ -2,16 +2,15 @@ import type { TranslationLang } from "../utils/i18n";
 import { buildBodyTranslationPrompt, buildTitleTranslationPrompt } from "./prompts";
 import type { TranslationProvider } from "./types";
 
-export const DEFAULT_OPENAI_TRANSLATION_MODEL = "gpt-5.4-mini";
-export const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
-export const OPENAI_REQUEST_TIMEOUT_MS = 60_000;
+export const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions";
+export const DEEPSEEK_REQUEST_TIMEOUT_MS = 60_000;
 
-type OpenAiChatMessage = {
+type DeepSeekChatMessage = {
   role: "system" | "user";
   content: string;
 };
 
-type OpenAiChatCompletionResponse = {
+type DeepSeekChatCompletionResponse = {
   choices?: Array<{
     message?: {
       content?: string | null;
@@ -19,7 +18,7 @@ type OpenAiChatCompletionResponse = {
   }>;
 };
 
-export type OpenAiTranslationProviderOptions = {
+export type DeepSeekTranslationProviderOptions = {
   apiKey: string;
   model?: string;
   endpoint?: string;
@@ -28,7 +27,7 @@ export type OpenAiTranslationProviderOptions = {
   timeoutMs?: number;
 };
 
-const callOpenAiChat = async ({
+const callDeepSeekChat = async ({
   apiKey,
   model,
   endpoint,
@@ -40,7 +39,7 @@ const callOpenAiChat = async ({
   model: string;
   endpoint: string;
   fetchImpl: typeof fetch;
-  messages: OpenAiChatMessage[];
+  messages: DeepSeekChatMessage[];
   timeoutMs: number;
 }) => {
   const controller = new AbortController();
@@ -55,13 +54,16 @@ const callOpenAiChat = async ({
       },
       body: JSON.stringify({
         model,
-        messages
+        messages,
+        // Thinking mode is enabled by default on DeepSeek V4; disable it so
+        // translation returns the final text directly without reasoning tokens.
+        thinking: { type: "disabled" }
       }),
       signal: controller.signal
     });
   } catch (error) {
     if ((error as Error)?.name === "AbortError") {
-      throw new Error(`OpenAI request timed out after ${timeoutMs}ms`);
+      throw new Error(`DeepSeek request timed out after ${timeoutMs}ms`);
     }
     throw error;
   } finally {
@@ -70,14 +72,14 @@ const callOpenAiChat = async ({
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    throw new Error(`OpenAI request failed with ${response.status}: ${errorText.slice(0, 500)}`);
+    throw new Error(`DeepSeek request failed with ${response.status}: ${errorText.slice(0, 500)}`);
   }
 
-  const payload = (await response.json()) as OpenAiChatCompletionResponse;
+  const payload = (await response.json()) as DeepSeekChatCompletionResponse;
   const content = payload.choices?.[0]?.message?.content?.trim();
 
   if (!content) {
-    throw new Error("OpenAI response did not contain translated content");
+    throw new Error("DeepSeek response did not contain translated content");
   }
 
   return content;
@@ -88,7 +90,7 @@ const translateTitle = async (
   targetLang: TranslationLang,
   title: string
 ) => {
-  return callOpenAiChat({
+  return callDeepSeekChat({
     ...config,
     messages: [
       { role: "system", content: buildTitleTranslationPrompt(targetLang) },
@@ -102,7 +104,7 @@ const translateBody = async (
   targetLang: TranslationLang,
   body: string
 ) => {
-  return callOpenAiChat({
+  return callDeepSeekChat({
     ...config,
     messages: [
       { role: "system", content: buildBodyTranslationPrompt(targetLang) },
@@ -111,19 +113,23 @@ const translateBody = async (
   });
 };
 
-export const createOpenAiTranslationProvider = (
-  options: OpenAiTranslationProviderOptions
+export const createDeepSeekTranslationProvider = (
+  options: DeepSeekTranslationProviderOptions
 ): TranslationProvider => {
   const { apiKey } = options;
   if (!apiKey) {
-    throw new Error("OpenAI translation provider requires an apiKey");
+    throw new Error("DeepSeek translation provider requires an apiKey");
   }
 
-  const model = options.model?.trim() || DEFAULT_OPENAI_TRANSLATION_MODEL;
-  const endpoint = options.endpoint ?? OPENAI_CHAT_COMPLETIONS_URL;
+  const model = options.model?.trim();
+  if (!model) {
+    throw new Error("DeepSeek translation provider requires a model");
+  }
+
+  const endpoint = options.endpoint ?? DEEPSEEK_CHAT_COMPLETIONS_URL;
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? (() => new Date());
-  const timeoutMs = options.timeoutMs ?? OPENAI_REQUEST_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs ?? DEEPSEEK_REQUEST_TIMEOUT_MS;
   const config = { apiKey, model, endpoint, fetchImpl, timeoutMs };
 
   return {
@@ -137,11 +143,11 @@ export const createOpenAiTranslationProvider = (
       return {
         translatedTitle: translatedTitle ?? null,
         translatedBody,
-        provider: `openai:${model}`,
+        provider: `deepseek:${model}`,
         translatedAt: now().toISOString()
       };
     }
   };
 };
 
-export const OPENAI_TRANSLATION_PROVIDER_ID_PREFIX = "openai:";
+export const DEEPSEEK_TRANSLATION_PROVIDER_ID_PREFIX = "deepseek:";

@@ -224,7 +224,7 @@ describe("createApp admin and post editor routes", () => {
 
   it("returns 404 for the translation editor before a translation exists", async () => {
     setSignedInAdmin();
-    state.translationModel = "gpt-5.4-mini";
+    state.translationModel = "deepseek-v4-flash";
     mockDb.getPostById = async () => createPostDetail({ source_lang: "zh" });
 
     const res = await request("/posts/7/translation/edit", undefined, true);
@@ -234,7 +234,7 @@ describe("createApp admin and post editor routes", () => {
 
   it("renders the standalone translation page for owned posts with unpublished translation actions", async () => {
     setSignedInAdmin();
-    state.translationModel = "gpt-5.4-mini";
+    state.translationModel = "deepseek-v4-flash";
     mockDb.getPostById = async () => createPostDetail({ source_lang: "zh" });
     mockDb.getPostTranslation = async () => createPostTranslation({ post_id: 7, lang: "en", status: "pending", is_published: 0 });
 
@@ -251,7 +251,7 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain("等待生成");
     expect(html).toContain("请刷新页面查看最新结果。");
     expect(html).toContain("使用模型");
-    expect(html).toContain("gpt-5.4-mini");
+    expect(html).toContain("deepseek-v4-flash");
     expect(html).toContain('id="translated-body" name="translatedBody" class="form-control width-full post-editor-input" rows="18" data-post-editor-input');
     expect(html).toContain('data-post-editor-preview');
     expect(html).toContain("保存草稿");
@@ -336,7 +336,7 @@ describe("createApp admin and post editor routes", () => {
         post_id: 7,
         lang: "en",
         status: "failed",
-        error_message: "OpenAI request failed with 404: model not found"
+        error_message: "DeepSeek request failed with 404: model not found"
       });
 
     const res = await request("/posts/7/translation/edit", undefined, true);
@@ -346,7 +346,7 @@ describe("createApp admin and post editor routes", () => {
     const html = await res.text();
     expect(html).toContain("生成失败");
     expect(html).toContain("失败原因");
-    expect(html).toContain("OpenAI request failed with 404: model not found");
+    expect(html).toContain("DeepSeek request failed with 404: model not found");
   });
 
   it("renders translated posts with a translation notice and lets readers switch back to the original", async () => {

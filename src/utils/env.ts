@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const disallowedLocalEnvKeys = new Set(["OPENAI_API_KEY_CAT"]);
+const disallowedLocalEnvKeys = new Set(["LCC_DS_API_KEY"]);
 
 const stripQuotes = (value: string) => {
   if (

@@ -36,7 +36,7 @@ describe("loadLocalEnvFiles", () => {
       [
         "# comment",
         "BASE_VALUE=from-env",
-        "OPENAI_API_KEY_CAT=from-dotenv",
+        "LCC_DS_API_KEY=from-dotenv",
         "QUOTED=\"hello world\"",
         "SINGLE='quoted value'",
         "INVALID_LINE"
@@ -47,13 +47,13 @@ describe("loadLocalEnvFiles", () => {
       [
         "BASE_VALUE=from-development",
         "DEV_ONLY=local",
-        "OPENAI_MODEL_CAT=gpt-5.4-mini",
+        "LCC_DS_MODEL=deepseek-v4-flash",
         "LOCKED=should-not-overwrite"
       ].join("\n")
     );
 
     process.env.LOCKED = "existing";
-    process.env.OPENAI_API_KEY_CAT = "from-system-env";
+    process.env.LCC_DS_API_KEY = "from-system-env";
 
     loadLocalEnvFiles(tempDir);
 
@@ -61,8 +61,8 @@ describe("loadLocalEnvFiles", () => {
     expect(process.env.DEV_ONLY).toBe("local");
     expect(process.env.QUOTED).toBe("hello world");
     expect(process.env.SINGLE).toBe("quoted value");
-    expect(process.env.OPENAI_API_KEY_CAT).toBe("from-system-env");
-    expect(process.env.OPENAI_MODEL_CAT).toBe("gpt-5.4-mini");
+    expect(process.env.LCC_DS_API_KEY).toBe("from-system-env");
+    expect(process.env.LCC_DS_MODEL).toBe("deepseek-v4-flash");
     expect(process.env.LOCKED).toBe("existing");
     expect(process.env.INVALID_LINE).toBeUndefined();
   });

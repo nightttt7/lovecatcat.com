@@ -4,7 +4,7 @@ import { createApp } from "./app";
 import { getSiteConfig } from "./config";
 import { createSqliteDb } from "./db/sqlite";
 import { createTranslationDispatcher } from "./translation/dispatcher";
-import { createOpenAiTranslationProvider, DEFAULT_OPENAI_TRANSLATION_MODEL } from "./translation/openai";
+import { createDeepSeekTranslationProvider } from "./translation/deepseek";
 import { parseAdminEmails } from "./utils/auth";
 import { loadLocalEnvFiles } from "./utils/env";
 import { findAvailablePort, parsePort } from "./utils/port";
@@ -14,15 +14,15 @@ loadLocalEnvFiles();
 const dbPath = process.env.DB_PATH ?? path.resolve(process.cwd(), "dev.db");
 const sqliteDb = createSqliteDb({ dbPath, readonly: false });
 
-const openAiApiKey = process.env.OPENAI_API_KEY_CAT ?? "";
-const openAiModel = process.env.OPENAI_MODEL_CAT?.trim();
+const deepSeekApiKey = process.env.LCC_DS_API_KEY ?? "";
+const deepSeekModel = process.env.LCC_DS_MODEL?.trim();
 
-const dispatchTranslationJobs = openAiApiKey
+const dispatchTranslationJobs = deepSeekApiKey && deepSeekModel
   ? createTranslationDispatcher({
       db: sqliteDb,
-      provider: createOpenAiTranslationProvider({
-        apiKey: openAiApiKey,
-        model: openAiModel
+      provider: createDeepSeekTranslationProvider({
+        apiKey: deepSeekApiKey,
+        model: deepSeekModel
       }),
       onError: (error, job) => {
         console.warn(
@@ -35,7 +35,7 @@ const dispatchTranslationJobs = openAiApiKey
 
 if (!dispatchTranslationJobs) {
   console.warn(
-    "[translation] OPENAI_API_KEY_CAT is not set. Translation generation will fail until the key is configured."
+    "[translation] LCC_DS_API_KEY and LCC_DS_MODEL are required. Translation generation will fail until both are configured."
   );
 }
 
@@ -43,11 +43,11 @@ const app = createApp({
   getSite: () => getSiteConfig(),
   getDb: () => sqliteDb,
   getAdminEmails: () => Array.from(parseAdminEmails(process.env.ADMIN_EMAILS)),
-  getTranslationModel: () => openAiModel?.trim() || DEFAULT_OPENAI_TRANSLATION_MODEL,
+  getTranslationModel: () => deepSeekModel,
   runTranslationJobs: async (_c, jobs) => {
     if (!dispatchTranslationJobs) {
       console.warn(
-        `[translation] dropping ${jobs.length} job(s) because OPENAI_API_KEY_CAT is not configured.`
+        `[translation] dropping ${jobs.length} job(s) because LCC_DS_API_KEY or LCC_DS_MODEL is not configured.`
       );
       return;
     }

@@ -32,10 +32,10 @@ applyTo: '**'
 
 ### Pre-Deploy Checks
 - Run `npx wrangler whoami` first to confirm the token is connected to the correct account.
-- `ADMIN_EMAILS` and `OPENAI_API_KEY_CAT` are environment-scoped secrets and must be configured separately for preview and production.
-- Configure the preview secrets with `npx wrangler secret put ADMIN_EMAILS --env preview` and `npx wrangler secret put OPENAI_API_KEY_CAT --env preview`.
-- Configure the production secrets with `npx wrangler secret put ADMIN_EMAILS` and `npx wrangler secret put OPENAI_API_KEY_CAT`.
-- The translation pipeline calls the OpenAI API directly from the Worker via `executionCtx.waitUntil`. There is no Cloudflare Queue or Workers AI binding to provision.
+- `ADMIN_EMAILS`, `LCC_DS_API_KEY`, and `LCC_DS_MODEL` are environment-scoped secrets and must be configured separately for preview and production.
+- Configure the preview secrets with `npx wrangler secret put ADMIN_EMAILS --env preview`, `npx wrangler secret put LCC_DS_API_KEY --env preview`, and `npx wrangler secret put LCC_DS_MODEL --env preview`.
+- Configure the production secrets with `npx wrangler secret put ADMIN_EMAILS`, `npx wrangler secret put LCC_DS_API_KEY`, and `npx wrangler secret put LCC_DS_MODEL`.
+- The translation pipeline calls the DeepSeek API directly from the Worker via `executionCtx.waitUntil`. There is no Cloudflare Queue or Workers AI binding to provision.
 
 ### Preview URL Rules
 - Use the preview environment URL `https://lovecatcat-preview.nightttt7.workers.dev` as the stable test entry point.

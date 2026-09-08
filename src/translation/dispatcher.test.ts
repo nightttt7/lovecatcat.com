@@ -78,7 +78,7 @@ const successProvider: TranslationProvider = {
     return {
       translatedTitle: input.title ? `[zh] ${input.title}` : null,
       translatedBody: `[zh] ${input.body}`,
-      provider: "openai:test-model",
+      provider: "deepseek:test-model",
       translatedAt: "2026-04-18T00:00:00.000Z"
     };
   }
@@ -94,7 +94,7 @@ describe("processTranslationJob", () => {
     expect(result).toBe("completed");
     expect(state.upserts.map((entry) => entry.status)).toEqual(["processing", "draft"]);
     expect(state.upserts[0].provider).toBe(DEFAULT_TRANSLATION_PROVIDER_ID);
-    expect(state.upserts[1].provider).toBe("openai:test-model");
+    expect(state.upserts[1].provider).toBe("deepseek:test-model");
     expect(state.upserts[1].translatedBody).toBe("[zh] Original body");
     expect(state.upserts[1].errorMessage).toBeNull();
   });

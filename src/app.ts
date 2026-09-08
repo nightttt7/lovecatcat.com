@@ -17,7 +17,6 @@ import { buildTagValue, DEFAULT_POST_TAG, displayTagValues, isDraftTag, normaliz
 import { postRoutePatterns, postRoutes } from "./utils/routes";
 import { detectPostSourceLanguage, getTranslationTargetLanguages, hashPostTranslationSource, normalizeSelectedSourceLanguage } from "./translation/content";
 import { DEFAULT_TRANSLATION_PROVIDER_ID } from "./translation/dispatcher";
-import { DEFAULT_OPENAI_TRANSLATION_MODEL } from "./translation/openai";
 import type { TranslationJobMessage, TranslationJobTrigger } from "./translation/types";
 
 type CurrentUser = {
@@ -1578,7 +1577,7 @@ const renderPostTranslationPage = <TBindings extends Record<string, unknown>>({
   const targetLang = getTranslationTargetLanguage(selectedSourceLang);
   const translationEditPath = getTranslationEditPath(post.id, targetLang);
   const actionLabel = translation ? t("translationRegenerateAction", lang) : t("translationGenerateAction", lang);
-  const configuredModel = options.getTranslationModel?.(c)?.trim() || DEFAULT_OPENAI_TRANSLATION_MODEL;
+  const configuredModel = options.getTranslationModel?.(c)?.trim() ?? "";
   const translationState = getPostTranslationUiState(translation);
   const isPublished = translation?.is_published === 1;
   const publishStatusLabelKey = isPublished ? "translationPublishStatusPublished" : "translationPublishStatusUnpublished";

@@ -88,7 +88,7 @@ The project uses one shared application layer with two runtime entry points:
 - [src/markdown](src/markdown): shared Markdown rendering, sanitization, and browser preview logic.
 - [src/render/layout.ts](src/render/layout.ts): shared page layout rendering.
 - [src/utils](src/utils): shared logic for auth, access control, dates, language switching, and related helpers.
-- [src/translation](src/translation): source-language detection, translation hashing, OpenAI translation provider, and shared dispatcher.
+- [src/translation](src/translation): source-language detection, translation hashing, DeepSeek translation provider, and shared dispatcher.
 
 The data flow is:
 
@@ -96,7 +96,7 @@ The data flow is:
 
 The async translation flow is:
 
-`post save -> source post saved -> admin opens the post editor -> source-language detection / manual confirmation -> admin clicks generate translation -> translation row marked pending/processing -> in-process OpenAI translation (waitUntil on Cloudflare, fire-and-forget on Node) -> post_translations updated to completed/failed -> admin reloads editor to review and optionally edit the translated title/body before publishing`
+`post save -> source post saved -> admin opens the post editor -> source-language detection / manual confirmation -> admin clicks generate translation -> translation row marked pending/processing -> in-process DeepSeek translation (waitUntil on Cloudflare, fire-and-forget on Node) -> post_translations updated to completed/failed -> admin reloads editor to review and optionally edit the translated title/body before publishing`
 
 ## Project Structure
 
@@ -158,9 +158,9 @@ npx wrangler whoami
 npx wrangler secret put ADMIN_EMAILS --env preview
 npx wrangler secret put ADMIN_EMAILS
 
-# Configure the OpenAI API key used by the translation pipeline
-npx wrangler secret put OPENAI_API_KEY_CAT --env preview
-npx wrangler secret put OPENAI_API_KEY_CAT
+# Configure the DeepSeek API key used by the translation pipeline
+npx wrangler secret put LCC_DS_API_KEY --env preview
+npx wrangler secret put LCC_DS_API_KEY
 
 # Deploy preview first
 npm run deploy:preview
@@ -197,17 +197,17 @@ Do not commit secrets into project files. Use system environment variables inste
 
 ### Environment Variables: Local Development
 
-Local development loads `.env` and `.env.development` in that order for non-secret local settings. `OPENAI_API_KEY_CAT` is intentionally not loaded from either file and should be configured as a Windows User or Machine environment variable instead:
+Local development loads `.env` and `.env.development` in that order for non-secret local settings. `LCC_DS_API_KEY` is intentionally not loaded from either file and should be configured as a Windows User or Machine environment variable instead:
 
 ```powershell
-[System.Environment]::SetEnvironmentVariable('OPENAI_API_KEY_CAT', 'your_openai_api_key', 'User')
+[System.Environment]::SetEnvironmentVariable('LCC_DS_API_KEY', 'your_deepseek_api_key', 'User')
 ```
 
-The local files still support values such as `OPENAI_MODEL_CAT`:
+The local files still support values such as `LCC_DS_MODEL`:
 
 - `ADMIN_EMAILS`: required, the list of admin email addresses, separated by commas, semicolons, or new lines.
-- `OPENAI_API_KEY_CAT`: required for translation generation, but do not place it in `.env` or `.env.development`. Local development should read it from the Windows User / Machine environment, and Cloudflare should read it from Wrangler-managed secrets. Without it, translation jobs are dropped with a warning.
-- `OPENAI_MODEL_CAT`: optional. Overrides the default OpenAI model used by the translation provider. Defaults to `gpt-5.4-mini`. When setting it in Cloudflare, use an exact OpenAI model id that is available to the configured OpenAI account; an invalid or unavailable model id will make translation jobs fail.
+- `LCC_DS_API_KEY`: required for translation generation, but do not place it in `.env` or `.env.development`. Local development should read it from the Windows User / Machine environment, and Cloudflare should read it from Wrangler-managed secrets. Without it, translation jobs are dropped with a warning.
+- `LCC_DS_MODEL`: required, the DeepSeek model id used by the translation provider (for example `deepseek-v4-flash`). It is not a secret and may be placed in `.env` / `.env.development` locally; on Cloudflare configure it as a Wrangler secret. An invalid or unavailable model id will make translation jobs fail.
 - `DB_PATH`: optional, the local SQLite path. The default is the project-root `dev.db`.
 - `PORT`: optional, the local port. If occupied, the app automatically switches to another available port.
 
@@ -215,17 +215,15 @@ The local files still support values such as `OPENAI_MODEL_CAT`:
 
 ### Environment Variables: Deploy
 
-- Cloudflare Worker runtime: both `ADMIN_EMAILS` and `OPENAI_API_KEY_CAT` must be configured separately for preview and production because they are isolated environment secrets and do not inherit automatically. Use Wrangler to write them directly to Cloudflare:
+- Cloudflare Worker runtime: both `ADMIN_EMAILS` and `LCC_DS_API_KEY` must be configured separately for preview and production because they are isolated environment secrets and do not inherit automatically. Use Wrangler to write them directly to Cloudflare:
 
 ```bash
 npx wrangler secret put ADMIN_EMAILS --env preview
 npx wrangler secret put ADMIN_EMAILS
-npx wrangler secret put OPENAI_API_KEY_CAT --env preview
-npx wrangler secret put OPENAI_API_KEY_CAT
-
-# Optional model override; omit it to use gpt-5.4-mini
-npx wrangler secret put OPENAI_MODEL_CAT --env preview
-npx wrangler secret put OPENAI_MODEL_CAT
+npx wrangler secret put LCC_DS_API_KEY --env preview
+npx wrangler secret put LCC_DS_API_KEY
+npx wrangler secret put LCC_DS_MODEL --env preview
+npx wrangler secret put LCC_DS_MODEL
 ```
 
 For example, enter:
@@ -248,7 +246,7 @@ binding = "DB"
 database_name = "lovecatcat-preview"
 ```
 
-The translation pipeline shares the same OpenAI API across local development, preview, and production. Locally, `OPENAI_API_KEY_CAT` should come from the Windows User / Machine environment. In Cloudflare, it should come from the Wrangler secret defined per environment alongside the `DB` D1 binding.
+The translation pipeline shares the same DeepSeek API across local development, preview, and production. Locally, `LCC_DS_API_KEY` should come from the Windows User / Machine environment. In Cloudflare, it should come from the Wrangler secret defined per environment alongside the `DB` D1 binding.
 
 Preview D1, production D1, and local `dev.db` are maintained independently. They do not automatically share local mock accounts, posts, or comments. After deployment, account validation should use accounts that actually exist in the target environment database rather than assuming local seed data is present.
 
@@ -257,10 +255,10 @@ Preview D1, production D1, and local `dev.db` are maintained independently. They
 - `posts` stores the source content, and `post_translations` stores per-language translated variants.
 - Saving a post stores the source language but does not auto-generate translated versions.
 - In the post editor, admins can manually trigger translation generation after reviewing or overriding the detected source language.
-- Translation runs asynchronously via the OpenAI API. The translation row is marked `processing` immediately so the editor reflects the in-flight state on reload, then transitions to `completed` or `failed` once the OpenAI call returns.
+- Translation runs asynchronously via the DeepSeek API. The translation row is marked `processing` immediately so the editor reflects the in-flight state on reload, then transitions to `completed` or `failed` once the DeepSeek call returns.
 - After a translation completes, admins can reload the editor to review the translated title/body, manually edit it, and then publish the translated version.
 - Post pages prefer the current UI language when a completed translation exists, with a visible original/translated toggle.
-- The same OpenAI provider is used in every environment so dev, preview, and production behave consistently. Configure `OPENAI_API_KEY_CAT` locally as a Windows User / Machine environment variable and as a Wrangler secret for preview and production.
+- The same DeepSeek provider is used in every environment so dev, preview, and production behave consistently. Configure `LCC_DS_API_KEY` locally as a Windows User / Machine environment variable and as a Wrangler secret for preview and production.
 
 ## Coding Standards
 

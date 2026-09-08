@@ -1,10 +1,10 @@
 import type { BlogDb } from "../db/types";
 import { isLang } from "../utils/i18n";
 import { hashPostTranslationSource } from "./content";
-import { OPENAI_TRANSLATION_PROVIDER_ID_PREFIX } from "./openai";
+import { DEEPSEEK_TRANSLATION_PROVIDER_ID_PREFIX } from "./deepseek";
 import type { TranslationJobMessage, TranslationProvider } from "./types";
 
-export const DEFAULT_TRANSLATION_PROVIDER_ID = `${OPENAI_TRANSLATION_PROVIDER_ID_PREFIX}unknown`;
+export const DEFAULT_TRANSLATION_PROVIDER_ID = `${DEEPSEEK_TRANSLATION_PROVIDER_ID_PREFIX}unknown`;
 
 export const processTranslationJob = async (
   job: TranslationJobMessage,
