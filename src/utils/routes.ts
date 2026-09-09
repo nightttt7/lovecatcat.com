@@ -40,7 +40,9 @@ export const postRoutes = {
   translationDelete: (postId: number) => `/posts/${postId}/translation/delete`,
   translationUnpublish: (postId: number) => `/posts/${postId}/translation/unpublish`,
   adminSourceLanguageDetectAll: () => "/admin/posts/source-language/detect",
-  adminSourceLanguage: (postId: number) => `/admin/posts/${postId}/source-language`
+  adminSourceLanguage: (postId: number) => `/admin/posts/${postId}/source-language`,
+  adminStatus: (postId: number) => `/admin/posts/${postId}/status`,
+  adminVisibility: (postId: number) => `/admin/posts/${postId}/visibility`
 };
 
 export const postRoutePatterns = {
@@ -58,5 +60,7 @@ export const postRoutePatterns = {
   translationDelete: "/posts/:id/translation/delete",
   translationUnpublish: "/posts/:id/translation/unpublish",
   adminSourceLanguageDetectAll: "/admin/posts/source-language/detect",
-  adminSourceLanguage: "/admin/posts/:id/source-language"
+  adminSourceLanguage: "/admin/posts/:id/source-language",
+  adminStatus: "/admin/posts/:id/status",
+  adminVisibility: "/admin/posts/:id/visibility"
 };

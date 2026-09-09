@@ -1032,6 +1032,34 @@ const renderAdminSourceLanguageControls = (post: PostListRow, sourceLang: Transl
   `;
 };
 
+const renderAdminPostStatusControls = (post: PostListRow, lang: Lang) => {
+  const actionPath = postRoutes.adminStatus(post.id);
+  const isDraft = Boolean(post.is_draft);
+
+  return html`
+    <form method="post" action="${actionPath}">
+      <select name="status" class="form-select" aria-label="${t("adminPostStatus", lang)}" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
+        <option value="published"${isDraft ? "" : " selected"}>${t("adminPostStatusPublished", lang)}</option>
+        <option value="draft"${isDraft ? " selected" : ""}>${t("adminPostStatusDraft", lang)}</option>
+      </select>
+    </form>
+  `;
+};
+
+const renderAdminPostVisibilityControls = (post: PostListRow, lang: Lang) => {
+  const actionPath = postRoutes.adminVisibility(post.id);
+  const isPrivate = Boolean(post.is_private);
+
+  return html`
+    <form method="post" action="${actionPath}">
+      <select name="visibility" class="form-select" aria-label="${t("adminPostVisibility", lang)}" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
+        <option value="public"${isPrivate ? "" : " selected"}>${t("adminPostVisibilityPublic", lang)}</option>
+        <option value="private"${isPrivate ? " selected" : ""}>${t("adminPostVisibilityPrivate", lang)}</option>
+      </select>
+    </form>
+  `;
+};
+
 const renderAdminPostTranslationOverview = (items: AdminPostTranslationSummary[], lang: Lang) => {
   if (items.length === 0) {
     return renderNotice(t("noManagedPosts", lang));
@@ -1043,6 +1071,8 @@ const renderAdminPostTranslationOverview = (items: AdminPostTranslationSummary[]
         <thead>
           <tr class="border-bottom color-bg-subtle">
             <th class="p-2 text-left">${t("postTitleLabel", lang)}</th>
+            <th class="p-2 text-left">${t("adminPostStatus", lang)}</th>
+            <th class="p-2 text-left">${t("adminPostVisibility", lang)}</th>
             <th class="p-2 text-left">${t("adminPostSourceLanguage", lang)}</th>
             <th class="p-2 text-left">${t("adminPostUnpublishedTranslations", lang)}</th>
             <th class="p-2 text-left">${t("adminPostPublishedTranslations", lang)}</th>
@@ -1056,9 +1086,9 @@ const renderAdminPostTranslationOverview = (items: AdminPostTranslationSummary[]
               <tr class="border-bottom">
                 <td class="p-2">
                   <a href="${postRoutes.original(post.id)}" class="text-bold color-fg-default action-card-title-link">${post.title || t("untitled", lang)}</a>
-                  ${post.is_draft ? html`<span class="Label ml-2">${t("draft", lang)}</span>` : html``}
-                  ${post.is_private ? html`<span class="Label ml-2">${t("privatePostBadge", lang)}</span>` : html``}
                 </td>
+                <td class="p-2">${renderAdminPostStatusControls(post, lang)}</td>
+                <td class="p-2">${renderAdminPostVisibilityControls(post, lang)}</td>
                 <td class="p-2">${renderAdminSourceLanguageControls(post, sourceLang, lang)}</td>
                 <td class="p-2">${renderTranslationSummary(post.id, translations, lang, false)}</td>
                 <td class="p-2">${renderTranslationSummary(post.id, translations, lang, true)}</td>
@@ -3254,6 +3284,113 @@ export const createApp = <TBindings extends Record<string, unknown> = Record<str
     const nextSourceLang = requestedSourceLang && isTranslationLang(requestedSourceLang) ? requestedSourceLang : currentSourceLang;
 
     await updatePostSourceLanguage(db, post, nextSourceLang, { sourceLangManual: true });
+
+    return c.redirect("/admin");
+  });
+
+  app.post(postRoutePatterns.adminStatus, async (c) => {
+    const accessUser = getAccessUser(c);
+    const postId = Number(c.req.param("id"));
+    if (Number.isNaN(postId)) {
+      return c.notFound();
+    }
+
+    if (!hasAccess(accessUser, "admin")) {
+      return redirectToLogin(c, "/admin");
+    }
+
+    const db = c.get("db");
+    const post = await db.getPostById(postId, { includeDrafts: true, viewerId: c.get("currentUser")?.id ?? null });
+    if (!post) {
+      return c.notFound();
+    }
+
+    if (!canEditOwnPost(accessUser, post.author_id)) {
+      const site = options.getSite(c);
+      const lang = c.get("lang");
+      return c.html(
+        renderLayout({
+          title: t("notAuthorized", lang),
+          description: site.siteDescription,
+          site,
+          isAdmin: c.get("isAdmin"),
+          currentUser: c.get("currentUser"),
+          lang,
+          aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
+          body: renderNotice(t("notAuthorized", lang)),
+          activePath: "/admin"
+        }),
+        403
+      );
+    }
+
+    const body = (await c.req.parseBody()) as FormBody;
+    const isDraft = getTrimmedFormValue(body, "status") === "draft";
+    const nextTag = buildTagValue(tagInputValue(post.tag), isDraft) ?? (isDraft ? `${DEFAULT_POST_TAG},draft` : DEFAULT_POST_TAG);
+
+    await db.updatePost({
+      id: post.id,
+      title: post.title ?? null,
+      body: post.body ?? "",
+      sourceLang: post.source_lang ?? "zh",
+      sourceLangManual: undefined,
+      tag: nextTag,
+      isPrivate: Boolean(post.is_private)
+    });
+
+    return c.redirect("/admin");
+  });
+
+  app.post(postRoutePatterns.adminVisibility, async (c) => {
+    const accessUser = getAccessUser(c);
+    const postId = Number(c.req.param("id"));
+    if (Number.isNaN(postId)) {
+      return c.notFound();
+    }
+
+    if (!hasAccess(accessUser, "admin")) {
+      return redirectToLogin(c, "/admin");
+    }
+
+    const db = c.get("db");
+    const post = await db.getPostById(postId, { includeDrafts: true, viewerId: c.get("currentUser")?.id ?? null });
+    if (!post) {
+      return c.notFound();
+    }
+
+    if (!canEditOwnPost(accessUser, post.author_id)) {
+      const site = options.getSite(c);
+      const lang = c.get("lang");
+      return c.html(
+        renderLayout({
+          title: t("notAuthorized", lang),
+          description: site.siteDescription,
+          site,
+          isAdmin: c.get("isAdmin"),
+          currentUser: c.get("currentUser"),
+          lang,
+          aboutPostId: c.get("aboutPostId"),
+          toolsPostId: c.get("toolsPostId"),
+          body: renderNotice(t("notAuthorized", lang)),
+          activePath: "/admin"
+        }),
+        403
+      );
+    }
+
+    const body = (await c.req.parseBody()) as FormBody;
+    const isPrivate = getTrimmedFormValue(body, "visibility") === "private";
+
+    await db.updatePost({
+      id: post.id,
+      title: post.title ?? null,
+      body: post.body ?? "",
+      sourceLang: post.source_lang ?? "zh",
+      sourceLangManual: undefined,
+      tag: post.tag ?? DEFAULT_POST_TAG,
+      isPrivate
+    });
 
     return c.redirect("/admin");
   });

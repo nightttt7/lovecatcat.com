@@ -874,7 +874,7 @@ describe("createApp admin and post editor routes", () => {
     mockDb.listAllComments = async () => [createComment({ post_id: 9, post_title: "Admin Post" })];
     mockDb.listUsers = async () => [createUser()];
     mockDb.listPostsByAuthor = async () => [
-      createPostDetail({ id: 7, title: "Admin Draft", source_lang: "zh", is_draft: 1, is_private: 0 }),
+      createPostDetail({ id: 7, title: "Admin Draft", source_lang: "zh", is_draft: 1, is_private: 1 }),
       createPostDetail({ id: 8, title: "Admin Published", source_lang: "en", is_draft: 0, is_private: 0 })
     ];
     mockDb.listPostTranslations = async (postId) =>
@@ -896,13 +896,29 @@ describe("createApp admin and post editor routes", () => {
     expect(html).toContain("全站评论");
     expect(html).toContain("全部账号");
     expectHtmlFragmentsInOrder(html, ['<h2 class="h3 mb-0">我的文章</h2>', '<h2 class="h3 mb-0">全部账号</h2>', '<h2 class="h3 mb-0">全站评论</h2>']);
-    expectHtmlToContainAll(postsSection, ["Admin Draft", "源语言", "英文", "Admin Published", "中文", "全部重新判断语言"]);
+    expectHtmlToContainAll(postsSection, [
+      "Admin Draft",
+      "状态",
+      "可见性",
+      "源语言",
+      "英文",
+      "Admin Published",
+      "中文",
+      "全部重新判断语言"
+    ]);
     expect(postsSection).toContain('<a href="/posts/7/original" class="text-bold color-fg-default action-card-title-link">Admin Draft</a>');
     expect(postsSection).toContain('<a href="/posts/8/original" class="text-bold color-fg-default action-card-title-link">Admin Published</a>');
     expect(postsSection).toContain('action="/admin/posts/source-language/detect"');
     expect(postsSection).toContain('action="/admin/posts/7/source-language"');
     expect(postsSection).toContain('action="/admin/posts/8/source-language"');
+    expect(postsSection).toContain('action="/admin/posts/7/status"');
+    expect(postsSection).toContain('action="/admin/posts/8/status"');
+    expect(postsSection).toContain('action="/admin/posts/7/visibility"');
+    expect(postsSection).toContain('action="/admin/posts/8/visibility"');
     expect(postsSection).toContain('onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()"');
+    expectHtmlToContainAll(postsSection, ['name="status"', 'name="visibility"']);
+    expectHtmlToContainAll(postsSection, ['<option value="published" selected>已发布</option>', '<option value="draft" selected>保存为草稿</option>']);
+    expectHtmlToContainAll(postsSection, ['<option value="public" selected>公开</option>', '<option value="private" selected>私密</option>']);
     expect(postsSection).not.toContain("保存源语言");
     expect(postsSection).not.toContain("(草稿)");
     expect(postsSection).not.toContain("(已完成)");
@@ -950,6 +966,122 @@ describe("createApp admin and post editor routes", () => {
     expect(res.headers.get("location")).toBe("/admin");
     expect(state.updatedPost).toMatchObject({ id: 7, sourceLang: "en", sourceLangManual: true });
     expect(state.deletedTranslations).toEqual([{ postId: 7, lang: "en" }]);
+  });
+
+  it("updates the post draft status from the admin dashboard", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({ tag: "news,updates" });
+
+    const res = await submitForm("/admin/posts/7/status", { status: "draft" }, true);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/admin");
+    expect(state.updatedPost).toMatchObject({ id: 7, tag: "news,updates,draft" });
+  });
+
+  it("removes the draft token when publishing from the admin dashboard", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({ tag: "news,updates,draft" });
+
+    const res = await submitForm("/admin/posts/7/status", { status: "published" }, true);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/admin");
+    expect(state.updatedPost).toMatchObject({ id: 7, tag: "news,updates" });
+  });
+
+  it("returns 404 for the admin status action with an invalid id", async () => {
+    setSignedInAdmin();
+
+    const res = await submitForm("/admin/posts/not-a-number/status", { status: "draft" }, true);
+
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects the admin status action for posts the admin does not own", async () => {
+    setSignedInAdmin({ id: 5 });
+    mockDb.getPostById = async () => createPostDetail({ author_id: 8, author_name: "other" });
+
+    const res = await submitForm("/admin/posts/7/status", { status: "draft" }, true);
+
+    expect(res.status).toBe(403);
+
+    const html = await res.text();
+    expect(html).toContain("你没有权限执行这个操作");
+  });
+
+  it("redirects anonymous users to login when changing the post status", async () => {
+    const res = await submitForm(
+      "/admin/posts/7/status",
+      { status: "draft" },
+      false,
+      {
+        headers: {
+          referer: "/admin"
+        }
+      }
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/login?next=%2Fadmin");
+  });
+
+  it("updates the post visibility from the admin dashboard", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({ tag: "news,updates" });
+
+    const res = await submitForm("/admin/posts/7/visibility", { visibility: "private" }, true);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/admin");
+    expect(state.updatedPost).toMatchObject({ id: 7, isPrivate: true, tag: "news,updates" });
+  });
+
+  it("restores public visibility from the admin dashboard", async () => {
+    setSignedInAdmin();
+    mockDb.getPostById = async () => createPostDetail({ is_private: 1, tag: "news,updates" });
+
+    const res = await submitForm("/admin/posts/7/visibility", { visibility: "public" }, true);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/admin");
+    expect(state.updatedPost).toMatchObject({ id: 7, isPrivate: false });
+  });
+
+  it("returns 404 for the admin visibility action with an invalid id", async () => {
+    setSignedInAdmin();
+
+    const res = await submitForm("/admin/posts/not-a-number/visibility", { visibility: "private" }, true);
+
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects the admin visibility action for posts the admin does not own", async () => {
+    setSignedInAdmin({ id: 5 });
+    mockDb.getPostById = async () => createPostDetail({ author_id: 8, author_name: "other" });
+
+    const res = await submitForm("/admin/posts/7/visibility", { visibility: "private" }, true);
+
+    expect(res.status).toBe(403);
+
+    const html = await res.text();
+    expect(html).toContain("你没有权限执行这个操作");
+  });
+
+  it("redirects anonymous users to login when changing the post visibility", async () => {
+    const res = await submitForm(
+      "/admin/posts/7/visibility",
+      { visibility: "private" },
+      false,
+      {
+        headers: {
+          referer: "/admin"
+        }
+      }
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/login?next=%2Fadmin");
   });
 
   it("redetects source language globally for posts without translations", async () => {
