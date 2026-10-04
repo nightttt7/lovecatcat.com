@@ -45,6 +45,28 @@ jobs:
         if: inputs.operation == 'deploy'
       - run: npm test
         if: inputs.operation == 'deploy'
+      - name: Check preview token scope
+        if: inputs.operation == 'deploy'
+        env:
+          CLOUDFLARE_API_TOKEN_LCC: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --input-type=module <<'NODE'
+          const token = process.env.CLOUDFLARE_API_TOKEN_LCC;
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          if (!token || !account) throw new Error('Cloudflare token or account ID is missing');
+          for (const [name, path] of [
+            ['account token', `/accounts/${account}/tokens/verify`],
+            ['preview Worker', `/accounts/${account}/workers/services/lovecatcat-preview`],
+          ]) {
+            const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const body = await response.json();
+            console.log(`${name}: HTTP ${response.status}, success=${body.success}, token status=${body.result?.status ?? 'n/a'}, error codes=${(body.errors ?? []).map(error => error.code).join(',') || 'none'}`);
+            if (!response.ok || !body.success) process.exitCode = 1;
+          }
+          NODE
       - name: Deploy lovecatcat-preview
         if: inputs.operation == 'deploy'
         env:
