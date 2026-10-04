@@ -52,5 +52,8 @@ jobs:
             exit 1
           fi
           npm run wrangler -- deploy --env=""
-      - name: Smoke test production
-        run: npm run smoke -- https://lovecatcat.com
+      # Production is intentionally not smoke tested over HTTP: Cloudflare answers
+      # GitHub runner IPs with a managed challenge (HTTP 403 plus
+      # `cf-mitigated: challenge`), so a public check cannot tell a broken deploy
+      # from edge bot protection. The app is smoke tested on preview before the
+      # merge, and this deploy step confirms the Worker and its routes.
