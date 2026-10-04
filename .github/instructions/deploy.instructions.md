@@ -38,6 +38,12 @@ applyTo: '**'
 - Production Worker secrets are not changed locally. Updating one creates a deployment and requires a separate GitHub Actions workflow.
 - The translation pipeline calls the DeepSeek API directly from the Worker via `executionCtx.waitUntil`. There is no Cloudflare Queue or Workers AI binding to provision.
 
+### Production Verification
+- The production workflow deploys the Worker and confirms its routes through Wrangler. It does not HTTP smoke test `https://lovecatcat.com`.
+- Cloudflare answers GitHub runner IPs with a managed challenge (`HTTP 403` plus the `cf-mitigated: challenge` header and a "Just a moment..." page), so a public check from Actions cannot distinguish a broken deployment from edge bot protection. Local, residential traffic is not challenged.
+- Treat the preview workflow's smoke test as the app-level gate and do not treat a challenged production HTTP response as a deployment failure.
+- If a production HTTP smoke test is ever required again, use a preview smoke test, or add a Cloudflare rule that skips bot protection for the runner, instead of weakening the site's edge protection.
+
 ### Preview URL Rules
 - Use the preview environment URL `https://lovecatcat-preview.nightttt7.workers.dev` as the stable test entry point.
 - Version-level Preview URLs are not used at the moment. If they are reintroduced later, add the corresponding rules.
