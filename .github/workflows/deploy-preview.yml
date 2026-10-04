@@ -78,6 +78,21 @@ jobs:
             exit 1
           fi
           npm run deploy:preview
+      - name: Wait for preview URL
+        if: inputs.operation == 'deploy'
+        run: |
+          for attempt in {1..30}; do
+            status=$(curl --silent --show-error --location --max-time 10 \
+              --output /dev/null --write-out '%{http_code}' \
+              https://lovecatcat-preview.nightttt7.workers.dev/ || true)
+            echo "Preview readiness attempt ${attempt}: HTTP ${status}"
+            if [ "$status" = "200" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo '::error::Preview URL did not become ready.'
+          exit 1
       - name: Smoke test preview
         if: inputs.operation == 'deploy'
         run: npm run smoke -- https://lovecatcat-preview.nightttt7.workers.dev
