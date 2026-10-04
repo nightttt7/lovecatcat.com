@@ -32,13 +32,16 @@ jobs:
       - run: npm test
       - name: Confirm preview is inactive
         run: |
-          status=$(curl --silent --show-error --location --max-time 20 \
-            --output preview-response.html --write-out '%{http_code}' \
-            https://lovecatcat-preview.nightttt7.workers.dev/)
-          if [ "$status" != "404" ] || ! grep -qi 'workers.cloudflare.com/favicon.ico' preview-response.html; then
-            echo '::error::Deactivate the preview URL before pushing to master.'
-            exit 1
-          fi
+          for path in / /static/primer.css; do
+            status=$(curl --silent --show-error --location --max-time 20 \
+              --output /dev/null --write-out '%{http_code}' \
+              "https://lovecatcat-preview.nightttt7.workers.dev${path}")
+            echo "Preview ${path}: HTTP ${status}"
+            if [ "$status" != "404" ]; then
+              echo '::error::Deactivate the preview URL before pushing to master.'
+              exit 1
+            fi
+          done
       - name: Deploy lovecatcat
         env:
           CLOUDFLARE_API_TOKEN_LCC: ${{ secrets.CLOUDFLARE_API_TOKEN_PRODUCTION }}
