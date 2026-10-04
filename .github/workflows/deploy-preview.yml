@@ -1,0 +1,72 @@
+name: Deploy preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Preview URL operation
+        type: choice
+        required: true
+        default: deploy
+        options:
+          - deploy
+          - deactivate
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-preview
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository == 'nightttt7/lovecatcat.com'
+    runs-on: ubuntu-latest
+    environment:
+      name: preview
+      url: https://lovecatcat-preview.nightttt7.workers.dev
+    steps:
+      - name: Require dev branch
+        run: |
+          if [ "$GITHUB_REF" != 'refs/heads/dev' ]; then
+            echo '::error::Select the dev branch for preview operations.'
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm run build:assets
+      - run: npm run typecheck
+        if: inputs.operation == 'deploy'
+      - run: npm test
+        if: inputs.operation == 'deploy'
+      - name: Deploy lovecatcat-preview
+        if: inputs.operation == 'deploy'
+        env:
+          CLOUDFLARE_API_TOKEN_LCC: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo '::error::Set the CLOUDFLARE_ACCOUNT_ID repository variable.'
+            exit 1
+          fi
+          npm run deploy:preview
+      - name: Smoke test preview
+        if: inputs.operation == 'deploy'
+        run: npm run smoke -- https://lovecatcat-preview.nightttt7.workers.dev
+      - name: Deactivate lovecatcat-preview URL
+        if: inputs.operation == 'deactivate'
+        env:
+          CLOUDFLARE_API_TOKEN_LCC: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo '::error::Set the CLOUDFLARE_ACCOUNT_ID repository variable.'
+            exit 1
+          fi
+          npm run deploy:preview:inactive

@@ -8,9 +8,10 @@
   "scripts": {
     "build:assets": "node scripts/build-post-editor-preview.mjs",
     "dev": "npm run build:assets && tsx watch src/server.ts",
-    "deploy:preview": "wrangler deploy --env preview",
-    "deploy:preview:inactive": "wrangler deploy --env preview --config wrangler.preview-inactive.toml",
-    "deploy:production": "wrangler deploy --env=\"\"",
+    "wrangler": "node scripts/wrangler.mjs",
+    "deploy:preview": "npm run wrangler -- deploy --env preview && node scripts/preview-subdomain.mjs enable",
+    "deploy:preview:inactive": "node scripts/preview-subdomain.mjs disable",
+    "smoke": "node scripts/smoke-test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

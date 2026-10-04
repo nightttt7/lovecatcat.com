@@ -15,10 +15,9 @@ npm run build:assets
 # Local development
 npm run dev
 
-# Cloudflare
+# Cloudflare preview (local)
 npm run deploy:preview
 npm run deploy:preview:inactive
-npm run deploy:production
 
 # Quality checks
 npm run typecheck
@@ -54,12 +53,9 @@ npm run deploy:preview
 # After UAT passes, close the public preview URL
 npm run deploy:preview:inactive
 
-# Merge the approved dev state into master
-git switch master
-git merge dev
-
-# Deploy production from master
-npm run deploy:production
+# Push dev, then open a GitHub pull request from dev into master.
+# Merge the pull request on GitHub to trigger production deployment.
+git push origin dev
 ```
 
 If no special release branch is needed, keep working on `dev` for the next cycle and treat `master` only as the production-ready branch.
@@ -152,48 +148,60 @@ This mode uses only local Node.js and SQLite `dev.db`.
 git switch dev
 
 # Confirm the Cloudflare account and token are pointing to the correct account first
-npx wrangler whoami
+npm run wrangler -- whoami
 
-# Configure ADMIN_EMAILS for preview and production if needed
-npx wrangler secret put ADMIN_EMAILS --env preview
-npx wrangler secret put ADMIN_EMAILS
+# Configure preview secrets if needed
+npm run wrangler -- secret put ADMIN_EMAILS --env preview
 
-# Configure the DeepSeek API key used by the translation pipeline
-npx wrangler secret put LCC_DS_API_KEY --env preview
-npx wrangler secret put LCC_DS_API_KEY
+# Configure the preview DeepSeek API key if needed
+npm run wrangler -- secret put LCC_DS_API_KEY --env preview
 
 # Deploy preview first
 npm run deploy:preview
 
-# Then run smoke tests / UAT at https://lovecatcat-preview.nightttt7.workers.dev
+# Run read-only HTTP smoke checks and UAT on preview
+npm run smoke -- https://lovecatcat-preview.nightttt7.workers.dev
 
 # After UAT, deactivate the preview URL while keeping the preview Worker and preview D1
 npm run deploy:preview:inactive
 
-# Merge the approved dev state into master
-git switch master
-git merge dev
-
-# Deploy to production from master; the script explicitly targets the top-level production environment
-# Equivalent to: wrangler deploy --env=""
-npm run deploy:production
+# Push the approved dev state, then open a GitHub pull request: dev -> master.
+# Merge that pull request on GitHub. The push created by the merge triggers production deployment.
+git push origin dev
 ```
 
 The current production Worker is `lovecatcat`, backed by database `lovecatcat-prod`, and served at `https://lovecatcat.com`.
 
 The preview Worker is `lovecatcat-preview`, backed by database `lovecatcat-preview`, with the stable preview URL `https://lovecatcat-preview.nightttt7.workers.dev`.
-Preview is intended only for short-lived UAT from `dev`. After validation, run `npm run deploy:preview:inactive` to disable the `workers.dev` entry so it does not remain publicly accessible, then merge the approved `dev` state into `master` before running production deployment. Re-run `npm run deploy:preview` when the next UAT cycle starts.
+Preview is intended only for short-lived UAT from `dev`. Deploy or deactivate it locally with the commands above, or run the `Deploy preview` GitHub Actions workflow on `dev` and choose `deploy` or `deactivate`. Preview code is deployed with `workers_dev = false`; `scripts/preview-subdomain.mjs` enables the preview URL after deployment and disables it after UAT without redeploying code. After UAT, close the preview URL, then merge the approved `dev` state into `master`. Every push to `master` triggers the `Deploy production` workflow; it checks that the preview URL is inactive before deploying.
 
-Before any deploy, confirm that `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `npx wrangler whoami` are all correct, and that `ADMIN_EMAILS` has been configured separately for preview and production.
+Before a local preview operation, verify `CLOUDFLARE_API_TOKEN_LCC` and `CLOUDFLARE_ACCOUNT_ID` by running `npm run wrangler -- whoami`. Keep the preview and production Worker runtime secrets configured separately.
 
 ### Environment Variables: Cloudflare API
 
-Do not commit secrets into project files. Use system environment variables instead:
+Local Cloudflare credentials are for `lovecatcat-preview` only. Do not commit tokens into project files. Set the preview token and account ID as User environment variables:
 
 ```powershell
-[System.Environment]::SetEnvironmentVariable('CLOUDFLARE_API_TOKEN', 'your_cloudflare_api_token', 'User')
+[System.Environment]::SetEnvironmentVariable('CLOUDFLARE_API_TOKEN_LCC', 'your_preview_only_cloudflare_api_token', 'User')
 [System.Environment]::SetEnvironmentVariable('CLOUDFLARE_ACCOUNT_ID', 'your_cloudflare_account_id', 'User')
 ```
+
+After changing User environment variables, restart the terminal or IDE before running Wrangler commands so the new values are loaded.
+
+Project Wrangler commands read `CLOUDFLARE_API_TOKEN_LCC` only from the process environment. The wrapper does not load the token from `.env` or `.env.development`, and stops if the variable is missing. It passes the value to Wrangler as `CLOUDFLARE_API_TOKEN`, the name Wrangler requires. Outside the production GitHub Actions job, the wrapper requires commands to target `--env preview`. The Cloudflare token's Worker scope is the access boundary; replace any existing broad local token with the preview-only token.
+
+### GitHub Actions deployment setup
+
+In the repository, open **Settings > Environments**. Create `preview` and `production`. Open each environment and set **Deployment branches and tags > Selected branches and tags > Add deployment branch or tag rule**. Choose **Branch** and enter exactly `dev` for `preview` or `master` for `production`. Add these **Environment secrets** under the corresponding environment:
+
+| Environment | Secret name | Cloudflare token scope |
+| --- | --- | --- |
+| `preview` | `CLOUDFLARE_API_TOKEN_PREVIEW` | Workers `Editor` for existing Worker `lovecatcat-preview` only |
+| `production` | `CLOUDFLARE_API_TOKEN_PRODUCTION` | Workers `Editor` for existing Worker `lovecatcat` only |
+
+In **Settings > Secrets and variables > Actions > Variables > New repository variable**, add `CLOUDFLARE_ACCOUNT_ID` with the Cloudflare account ID. Each workflow passes its own token to `CLOUDFLARE_API_TOKEN_LCC` for the project wrapper. The production token must remain in the `production` Environment; it is never needed on a local machine. Create account-owned Cloudflare API tokens with Workers `Editor` scoped to the corresponding existing Worker. No `D1 Write` is needed for deployment of the existing binding. Add `Zone > Workers Routes > Write` scoped to `lovecatcat.com` only if a deployment must change its custom-domain connection. See [Cloudflare Workers permissions](https://developers.cloudflare.com/workers/authorization/workers/).
+
+In **Settings > Rules > Rulesets > New ruleset > New branch ruleset**, target only `master`, set enforcement to **Active**, leave the bypass list empty, and enable **Require a pull request before merging**, **Restrict deletions**, and **Block force pushes**. Leave required approvals at zero for this single-owner repository and do not require a status check that does not run on pull requests. Merge `dev` into `master` through a GitHub pull request after preview UAT and deactivation; direct pushes to `master` will be blocked. `Deploy production` then runs automatically on the merge push after asset build, typecheck, tests, a check that the preview URL is inactive, and a read-only production HTTP smoke test. Do not add required reviewers to the `production` Environment if deployment should remain automatic. `Deploy preview` is started manually in Actions using the `dev` branch and also runs the HTTP smoke test; GitHub shows this manual workflow after the workflow file exists on the default `master` branch. For the first rollout, run preview UAT locally before merging the workflow files into `master`.
 
 ### Environment Variables: Local Development
 
@@ -215,16 +223,15 @@ The local files still support values such as `LCC_DS_MODEL`:
 
 ### Environment Variables: Deploy
 
-- Cloudflare Worker runtime: both `ADMIN_EMAILS` and `LCC_DS_API_KEY` must be configured separately for preview and production because they are isolated environment secrets and do not inherit automatically. Use Wrangler to write them directly to Cloudflare:
+- Cloudflare Worker runtime: `ADMIN_EMAILS`, `LCC_DS_API_KEY`, and `LCC_DS_MODEL` must be configured separately for preview and production because they are isolated environment secrets and do not inherit automatically. Local Wrangler commands can update preview secrets:
 
 ```bash
-npx wrangler secret put ADMIN_EMAILS --env preview
-npx wrangler secret put ADMIN_EMAILS
-npx wrangler secret put LCC_DS_API_KEY --env preview
-npx wrangler secret put LCC_DS_API_KEY
-npx wrangler secret put LCC_DS_MODEL --env preview
-npx wrangler secret put LCC_DS_MODEL
+npm run wrangler -- secret put ADMIN_EMAILS --env preview
+npm run wrangler -- secret put LCC_DS_API_KEY --env preview
+npm run wrangler -- secret put LCC_DS_MODEL --env preview
 ```
+
+The production workflow deploys code using the existing production Worker secrets. Changing a production Worker secret creates a new deployment; add a separate GitHub Actions workflow when such a change is needed.
 
 For example, enter:
 

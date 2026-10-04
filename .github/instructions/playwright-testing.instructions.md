@@ -20,7 +20,7 @@ applyTo: '**'
 - Start the local service first with `npm run dev`.
 - The default local test URL is `http://localhost:3000/`.
 - If port `3000` is occupied, detect the fallback local dev URL from terminal output and use that URL instead of assuming the default port.
-- For deployed preview validation, use the stable preview URL after `npm run deploy:preview`.
+- For deployed preview validation, use the stable preview URL after a local or GitHub Actions preview deployment.
 - Browser-level validation must include real clicks, typing, form submission, and navigation rather than only checking static HTML.
 
 ### Recommended Flow
