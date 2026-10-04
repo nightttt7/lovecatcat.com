@@ -63,7 +63,7 @@ jobs:
               headers: { Authorization: `Bearer ${token}` },
             });
             const body = await response.json();
-            console.log(`${name}: HTTP ${response.status}, success=${body.success}, token status=${body.result?.status ?? 'n/a'}, token ID prefix=${body.result?.id?.slice(0, 8) ?? 'n/a'}, error codes=${(body.errors ?? []).map(error => error.code).join(',') || 'none'}`);
+            console.log(`${name}: HTTP ${response.status}, success=${body.success}, token status=${body.result?.status ?? 'n/a'}, error codes=${(body.errors ?? []).map(error => error.code).join(',') || 'none'}`);
             if (!response.ok || !body.success) process.exitCode = 1;
           }
           NODE
