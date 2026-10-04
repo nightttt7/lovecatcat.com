@@ -98,7 +98,8 @@ The async translation flow is:
 
 ```text
 .
-├─ .github/instructions/    # Collaboration rules, testing guidance, dev.db constraints
+├─ AGENTS.md                # Agent guidance: commands, release flow, conventions
+├─ .github/workflows/       # Preview and production Cloudflare deploy workflows
 ├─ src/
 │  ├─ app.ts                # Main routes and application entry
 │  ├─ server.ts             # Local Node.js development entry
