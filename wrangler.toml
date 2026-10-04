@@ -15,7 +15,7 @@ database_id = "aebaaa10-b2e7-4f1f-9dc1-70edbea8c523"
 LCC_DS_MODEL = "deepseek-v4-flash"
 
 [env.preview]
-workers_dev = true
+workers_dev = false
 preview_urls = false
 routes = []
 

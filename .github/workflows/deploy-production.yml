@@ -1,0 +1,53 @@
+name: Deploy production
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository == 'nightttt7/lovecatcat.com'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://lovecatcat.com
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm run build:assets
+      - run: npm run typecheck
+      - run: npm test
+      - name: Confirm preview is inactive
+        run: |
+          status=$(curl --silent --show-error --location --max-time 20 \
+            --output preview-response.html --write-out '%{http_code}' \
+            https://lovecatcat-preview.nightttt7.workers.dev/)
+          if [ "$status" != "404" ] || ! grep -qi 'workers.cloudflare.com/favicon.ico' preview-response.html; then
+            echo '::error::Deactivate the preview URL before pushing to master.'
+            exit 1
+          fi
+      - name: Deploy lovecatcat
+        env:
+          CLOUDFLARE_API_TOKEN_LCC: ${{ secrets.CLOUDFLARE_API_TOKEN_PRODUCTION }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo '::error::Set the CLOUDFLARE_ACCOUNT_ID repository variable.'
+            exit 1
+          fi
+          npm run wrangler -- deploy --env=""
+      - name: Smoke test production
+        run: npm run smoke -- https://lovecatcat.com

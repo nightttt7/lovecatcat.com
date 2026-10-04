@@ -33,18 +33,18 @@ If image upload or R2 are implemented later, they should be added incrementally 
 - This is a solo-development repository. Use `dev` as the only long-lived development branch unless the user explicitly asks for another branch.
 - Do not ask for or create extra feature branches by default. `master` is the release branch, not the working branch.
 - Local `npm run dev` depends only on Node.js and the project-root `dev.db` by default and does not need to connect to Cloudflare.
-- `npm run deploy:preview`, `npm run deploy:preview:inactive`, and `npm run deploy:production` connect to Cloudflare, so Wrangler must already have working Cloudflare access before they are run.
-- The default release order is: develop on `dev` -> `npm run deploy:preview` from `dev` -> pause for human preview UAT -> `npm run deploy:preview:inactive` -> merge `dev` into `master` -> `npm run deploy:production` from `master`. Do not skip preview, do not deploy production directly from `dev`, and do not deploy straight to production.
-- For local machines or CI accessing Cloudflare, the current convention is to use `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for authentication and account selection.
+- Local `npm run deploy:preview` and `npm run deploy:preview:inactive` connect to Cloudflare using a preview-only token. Production deployment runs only through GitHub Actions after a push to `master`.
+- The default release order is: develop on `dev` -> deploy preview locally or through Actions -> preview UAT -> deactivate preview locally or through Actions -> merge a `dev` to `master` pull request -> automatic production Actions deployment. Do not skip preview or deploy production directly from `dev`.
+- For local preview operations, set `CLOUDFLARE_API_TOKEN_LCC` to a token scoped only to `lovecatcat-preview` and set `CLOUDFLARE_ACCOUNT_ID` in the process environment. GitHub Environment secrets hold separate preview and production tokens and pass the selected value to the same wrapper. The wrapper reads only `CLOUDFLARE_API_TOKEN_LCC`, fails if it is missing, and passes it to Wrangler under Wrangler's required `CLOUDFLARE_API_TOKEN` name.
 - On local Windows development machines, prefer system environment variables for Cloudflare credentials rather than storing secrets in repository `.env` files.
 - Cloudflare Worker runtime variables are separate from local `.env` files. Secrets such as `ADMIN_EMAILS` do not inherit between preview and production and must be configured separately.
 - `DB` is a D1 binding, not a normal environment variable. Production currently uses `lovecatcat-prod`, while preview uses `lovecatcat-preview`.
 - The top-level configuration in `wrangler.toml` maps to production Worker `lovecatcat`, while `[env.preview]` maps to preview Worker `lovecatcat-preview`.
-- `wrangler.preview-inactive.toml` is used only to close down preview exposure and performs a redeploy of `[env.preview]` with `workers_dev = false`.
+- Preview deploys with `workers_dev = false`, then `scripts/preview-subdomain.mjs` enables only `lovecatcat-preview` on `workers.dev`; deactivation uses the same script without redeploying code. This avoids Wrangler's account-wide subdomain lookup when `workers_dev = true`.
 - Production does not expose `workers.dev`, while preview uses the stable URL `https://lovecatcat-preview.nightttt7.workers.dev`.
 - The project does not currently depend on version-level Preview URLs. Browser-level regression should prefer the stable preview `workers.dev` URL.
-- Preview is an independent UAT-only environment and does not automatically deactivate after production deployment. After UAT, run `npm run deploy:preview:inactive` to disable the `workers.dev` exposure before production deployment.
-- After preview enters inactive mode, the stable `workers.dev` URL should return a Cloudflare 404 page rather than the app home page. The currently verified result is HTTP `404 Not Found` with `error code: 1042`.
+- Preview is an independent UAT-only environment and does not automatically deactivate after production deployment. After UAT, deactivate its `workers.dev` exposure locally or through the preview Actions workflow before pushing `master`.
+- After preview enters inactive mode, the stable `workers.dev` URL should return Cloudflare's HTTP 404 "Page not found" page rather than the app home page.
 - Preview D1, production D1, and local `dev.db` are three independent data sets. Do not assume local mock accounts and posts automatically exist in Cloudflare environments.
 - An empty preview D1 can start directly because the app automatically bootstraps the base schema.
 
@@ -64,10 +64,10 @@ If image upload or R2 are implemented later, they should be added incrementally 
 3. Finished migrating the production database to Cloudflare D1 and configured the D1 binding `DB` in `wrangler.toml`. Local development continues to use `dev.db`.
 4. Removed temporary migration scripts and outdated documents, and kept README plus instructions synchronized so unfinished capabilities are not described as already implemented.
 5. Completed the base UI refactor: switched fully to local Primer CSS and established shared visual rules for layout, post lists, post details, and comments.
-6. Clarified environment-variable and deployment rules: local development defaults to `.env` / `.env.development` plus `dev.db`, while Cloudflare operations use `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, Worker `ADMIN_EMAILS`, and D1 binding `DB`.
+6. Clarified environment-variable and deployment rules: local development defaults to `.env` / `.env.development` plus `dev.db`, while Cloudflare operations use `CLOUDFLARE_API_TOKEN_LCC`, `CLOUDFLARE_ACCOUNT_ID`, Worker `ADMIN_EMAILS`, and D1 binding `DB`.
 7. Current editing capabilities include title, tags, body textarea, shared Markdown live preview, and draft toggle. Image upload and R2 storage are still pending.
 8. Deployed the Worker to Cloudflare under the name `lovecatcat`. The production primary domain has been switched to `https://lovecatcat.com`, and production `workers.dev` has been disabled.
 9. Verified through Playwright MCP that the stable preview URL can load the app directly. The current deployment and remote-debug flow treats the independent preview environment as the only test entry point.
 10. Confirmed that production D1 currently holds independent site data and is not equivalent to local `dev.db`. Future production validation must not assume local admin test accounts already exist.
-11. Established an independent `preview` Worker environment and `lovecatcat-preview` D1. Future Cloudflare releases should follow the default flow: develop on `dev` -> preview -> human UAT -> `npm run deploy:preview:inactive` -> merge `dev` into `master` -> production.
+11. Established an independent `preview` Worker environment and `lovecatcat-preview` D1. Future Cloudflare releases should follow the default flow: develop on `dev` -> preview UAT -> deactivate preview -> merge a `dev` to `master` pull request -> automatic production Actions deployment.
 12. Defined the solo-development branch workflow: develop on `dev`, use preview deploy for UAT, then merge approved changes into `master` before production deployment.
